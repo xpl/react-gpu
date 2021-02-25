@@ -1,0 +1,16 @@
+html, body, #root {
+  font-family: 'Courier New', Courier, monospace;
+}
+
+body {
+  padding: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+canvas {
+  border: 1px solid black;
+  display: block;
+}
