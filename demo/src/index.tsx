@@ -4,7 +4,7 @@ import './index.scss'
 
 import React, { useEffect, useRef } from 'react'
 import { render } from 'react-dom'
-import { GPUCanvas } from './react-gpu'
+import { GPUCanvas } from 'react-gpu'
 
 function App() {
   return (

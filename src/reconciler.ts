@@ -1,5 +1,4 @@
 import ReactReconciler from 'react-reconciler'
-import React, { useLayoutEffect, useRef } from 'react'
 
 const rootHostContext = {}
 const childHostContext = {}
@@ -149,23 +148,4 @@ export function render(elements: React.ReactNode, canvas: HTMLCanvasElement, cal
     null,
     callback
   )
-}
-
-// TODO: forwardRef
-export function GPUCanvas({
-  width,
-  height,
-  children
-}: {
-  width: number
-  height: number
-  children?: React.ReactChildren
-}) {
-  const element = useRef<HTMLCanvasElement | null>(null)
-
-  useLayoutEffect(() => {
-    if (element.current) render(children, element.current)
-  }, [element.current])
-
-  return <canvas ref={element} width={width} height={height}></canvas>
 }

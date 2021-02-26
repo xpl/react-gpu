@@ -6,6 +6,10 @@ module.exports = {
   mount: {
     public: { url: '/', static: true },
     src: { url: '/dist' },
+    '../src': { url: '/dist/react-gpu' }
+  },
+  alias: {
+    "react-gpu": "../src"
   },
   plugins: [
     '@snowpack/plugin-react-refresh',
@@ -24,7 +28,7 @@ module.exports = {
     /* ... */
   },
   devOptions: {
-    /* ... */
+    open: 'none'
   },
   buildOptions: {
     /* ... */

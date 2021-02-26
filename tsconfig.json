@@ -22,19 +22,18 @@
     "jsx": "react",
     "typeRoots": [
       "./node_modules/@types",
-      "../node_modules/@types",
-      "../node_modules/@webgpu"
+      "./node_modules/@webgpu"
     ],
     "paths": {
-      "react-gpu": ["../src"],
       // If you configured any Snowpack aliases, add them here.
       // Add this line to get types for streaming imports (packageOptions.source="remote"):
       //     "*": [".snowpack/types/*"]
       // More info: https://www.snowpack.dev/guides/streaming-imports
     },
   },
-  "include": ["src", "../src"],
+  "include": ["src"],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "demo"
   ]
 }
