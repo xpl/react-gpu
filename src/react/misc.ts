@@ -1,4 +1,4 @@
-import React, { useState, useLayoutEffect } from 'react'
+import React, { useRef, useState, useLayoutEffect } from 'react'
 
 export type ElementSize = [width: number, height: number]
 
@@ -23,6 +23,12 @@ export function useObservedClientSize(ref: React.RefObject<HTMLElement | null>):
   }, [])
 
   return size
+}
+
+export function useLiveRef<T>(x: T) {
+  const ref = useRef(x)
+  ref.current = x
+  return ref
 }
 
 export function assignRef<T>(target: React.ForwardedRef<T>, source: React.RefObject<T>) {

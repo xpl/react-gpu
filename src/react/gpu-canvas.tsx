@@ -9,7 +9,7 @@ export const GPUCanvas = React.memo(
       className?: string
       pixelRatio?: number
       options?: webgpu.InitOptions
-      children?: React.ReactChildren
+      children?: React.ReactNode
     },
     forwardedRef: React.ForwardedRef<HTMLCanvasElement | null>
   ) {
