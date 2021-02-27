@@ -1,46 +1,7 @@
-export class InitError extends Error {}
+import { Context } from './init'
 
-export async function init(
-  canvas: HTMLCanvasElement,
-  adapterOptions?: GPURequestAdapterOptions,
-  deviceDescriptor?: GPUDeviceDescriptor,
-  swapChainDescriptor?: GPUSwapChainDescriptor
-) {
-  const context = (canvas.getContext('gpupresent') as unknown) as GPUCanvasContext
-  if (!context) throw new InitError('Your browser does not support WebGPU')
-
-  const adapter = navigator.gpu && (await navigator.gpu.requestAdapter(adapterOptions))
-  const device = (adapter && (await adapter.requestDevice(deviceDescriptor)))!
-  if (!device) throw new InitError('Failed to init WebGPU device!')
-
-  device.addEventListener('uncapturederror', error => console.error(error))
-
-  const colorFormat = await context.getSwapChainPreferredFormat((adapter as unknown) as GPUDevice)
-
-  const swapChain = context.configureSwapChain({
-    device,
-    format: colorFormat,
-    usage: GPUTextureUsage.RENDER_ATTACHMENT, // means that it will go to screen
-    ...swapChainDescriptor
-  })
-
-  let depthStencilAttachment: GPUTextureView
-
-  function canvasSizeChanged() {
-    const depthStencilTexture = device.createTexture({
-      size: [canvas.width, canvas.height, 1],
-      mipLevelCount: 1,
-      sampleCount: 1,
-      dimension: '2d',
-      format: 'depth24plus-stencil8',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC
-    })
-    depthStencilAttachment = depthStencilTexture.createView()
-  }
-
-  canvasSizeChanged()
-
-  const shader = device.createShaderModule({
+export function exampleScene(ctx: Context) {
+  const shader = ctx.device.createShaderModule({
     code: `
 [[block]] struct Uniforms {
   [[offset(0)]] projectionMatrix: mat4x4<f32>;
@@ -78,7 +39,7 @@ fn main_frag() -> void {
       /* position */ 0, 0, 0, /* color */ 0, 0, 1, 1,
       /* position */ 0, 0, 1, /* color */ 0.5, 0.5, 1, 1,
     ])
-  const vertexBuffer = device.createBuffer({
+  const vertexBuffer = ctx.device.createBuffer({
     size: vertexBufferData.byteLength,
     usage: GPUBufferUsage.VERTEX,
     mappedAtCreation: true
@@ -112,7 +73,7 @@ fn main_frag() -> void {
     0, 0.8164965510368347, 0.5773502588272095, 0, -0.7071067690849304, -0.40824827551841736,
     0.5773502588272095, 0, -0, 4.440892098500626e-16, -5.196152210235596, 1
   ])
-  const uniformBuffer = device.createBuffer({
+  const uniformBuffer = ctx.device.createBuffer({
     size: uniformBufferData.byteLength,
     usage: GPUBufferUsage.UNIFORM,
     mappedAtCreation: true
@@ -120,7 +81,7 @@ fn main_frag() -> void {
   new Float32Array(uniformBuffer.getMappedRange()).set(uniformBufferData)
   uniformBuffer.unmap()
 
-  const bindGroupLayout = device.createBindGroupLayout({
+  const bindGroupLayout = ctx.device.createBindGroupLayout({
     entries: [
       {
         binding: 0,
@@ -130,7 +91,7 @@ fn main_frag() -> void {
     ]
   })
 
-  const bindGroup = device.createBindGroup({
+  const bindGroup = ctx.device.createBindGroup({
     layout: bindGroupLayout,
     entries: [
       {
@@ -140,8 +101,8 @@ fn main_frag() -> void {
     ]
   })
 
-  const pipeline = device.createRenderPipeline({
-    layout: device.createPipelineLayout({
+  const pipeline = ctx.device.createRenderPipeline({
+    layout: ctx.device.createPipelineLayout({
       bindGroupLayouts: [bindGroupLayout]
     }),
     vertexStage: {
@@ -157,7 +118,7 @@ fn main_frag() -> void {
     },
     colorStates: [
       {
-        format: colorFormat,
+        format: ctx.colorFormat,
         writeMask: GPUColorWrite.ALL,
         alphaBlend: {
           srcFactor: 'src-alpha',
@@ -183,19 +144,19 @@ fn main_frag() -> void {
     }
   })
 
-  function renderDemo() {
-    const commandEncoder = device.createCommandEncoder()
+  function draw() {
+    const commandEncoder = ctx.device.createCommandEncoder()
 
     const passEncoder = commandEncoder.beginRenderPass({
       colorAttachments: [
         {
-          attachment: swapChain.getCurrentTexture().createView(),
+          attachment: ctx.swapChain.getCurrentTexture().createView(),
           loadValue: [0.25, 0.28, 0.26, 1.0],
           storeOp: 'store'
         }
       ],
       depthStencilAttachment: {
-        attachment: depthStencilAttachment,
+        attachment: ctx.depthStencilAttachment,
         depthLoadValue: 1.0,
         depthStoreOp: 'store',
         stencilLoadValue: 1.0,
@@ -209,8 +170,18 @@ fn main_frag() -> void {
     passEncoder.endPass()
     const commandBuffer = commandEncoder.finish()
 
-    device.queue.submit([commandBuffer])
+    ctx.device.queue.submit([commandBuffer])
   }
 
-  return { context, adapter, device, swapChain, canvasSizeChanged, renderDemo }
+  function destroy() {
+    vertexBuffer.destroy()
+    uniformBuffer.destroy()
+  }
+
+  return {
+    draw,
+    destroy
+  }
 }
+
+export type ExampleScene = ReturnType<typeof exampleScene>

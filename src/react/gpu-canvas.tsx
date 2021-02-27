@@ -15,8 +15,10 @@ export const GPUCanvas = React.memo(
   ) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null)
     const observedSize = useObservedClientSize(canvasRef)
-    const { pixelRatio = window.devicePixelRatio } = props
+    const exampleSceneRef = useRef<webgpu.ExampleScene | null>(null)
     const [webgpuContext, setWebgpuContext] = useState<webgpu.Context | null>(null)
+
+    const { pixelRatio = window.devicePixelRatio } = props
 
     useLayoutEffect(() => {
       webgpu.init(canvasRef.current!, props.options).then(setWebgpuContext)
@@ -24,9 +26,17 @@ export const GPUCanvas = React.memo(
 
     useLayoutEffect(() => {
       if (webgpuContext) {
+        exampleSceneRef.current = webgpu.exampleScene(webgpuContext)
+        return exampleSceneRef.current.destroy
+      }
+    }, [webgpuContext])
+
+    useLayoutEffect(() => {
+      if (webgpuContext) {
         canvasRef.current!.width = observedSize[0] * pixelRatio
         canvasRef.current!.height = observedSize[1] * pixelRatio
         webgpuContext.canvasResized()
+        exampleSceneRef.current?.draw()
       }
     }, [observedSize, pixelRatio, webgpuContext])
 

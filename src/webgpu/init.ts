@@ -49,7 +49,17 @@ export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
 
   console.debug('[react-gpu] WebGPU initialized')
 
-  return { context, adapter, device, swapChain, canvasResized }
+  return {
+    context,
+    adapter,
+    device,
+    swapChain,
+    colorFormat,
+    get depthStencilAttachment() {
+      return depthStencilAttachment
+    },
+    canvasResized
+  }
 }
 
 export type Context = PromiseType<ReturnType<typeof init>>
