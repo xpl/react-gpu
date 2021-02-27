@@ -10,7 +10,10 @@ body {
   box-sizing: border-box;
 }
 
-canvas {
+.canvas-3d {
+  margin-top: 7px;
   border: 1px solid black;
   display: block;
+  width: 100%;
+  aspect-ratio: 4/3;
 }
