@@ -1,9 +1,44 @@
 import ReactReconciler from 'react-reconciler'
+import * as webgpu from '../webgpu'
 
-const rootHostContext = {}
-const childHostContext = {}
+type HTMLCanvasElementWithGPU = HTMLCanvasElement & {
+  _gpuContext: webgpu.Context
+  _gpuContainer: ReturnType<typeof reconciler.createContainer>
+}
 
-const reconciler = ReactReconciler({
+const intrinsicElementNameToType = {
+  'gpu-command': webgpu.Type.Command,
+  'gpu-render-pass': webgpu.Type.RenderPass,
+  'gpu-render-bundle': webgpu.Type.RenderBundle,
+  'gpu-draw': webgpu.Type.Draw
+} as const
+
+function typeName(x: webgpu.Type) {
+  return (Object.entries(intrinsicElementNameToType).find(([, v]) => v === x) || ['unknown'])[0]
+}
+
+const allowedParents = {
+  [webgpu.Type.Command]: null,
+  [webgpu.Type.RenderPass]: webgpu.Type.Command,
+  [webgpu.Type.RenderBundle]: webgpu.Type.RenderPass,
+  [webgpu.Type.Draw]: webgpu.Type.RenderBundle
+} as const
+
+const reconciler = ReactReconciler<
+  string, // type
+  unknown, // props,
+  HTMLCanvasElementWithGPU, // container
+  webgpu.Descriptor, // instance
+  unknown, // TextInstance
+  unknown, // SuspenseInstance
+  unknown, // HydratableInstance
+  unknown, // PublicInstance
+  webgpu.Context, // HostContext
+  unknown, // UpdatePayload
+  unknown, // ChildSet
+  number, // TimeoutHandle
+  number // NoTimeout
+>({
   isPrimaryRenderer: false,
   supportsMutation: true,
   supportsPersistence: false,
@@ -12,82 +47,78 @@ const reconciler = ReactReconciler({
   now: performance.now,
 
   getRootHostContext(rootContainerInstance) {
-    return {}
+    console.log('getRootHostContext', ...arguments)
+    return rootContainerInstance._gpuContext
   },
 
   getChildHostContext(parentHostContext, type, rootContainerInstance) {
-    return {}
+    console.log('getChildHostContext', ...arguments)
+    return parentHostContext
   },
 
   getPublicInstance(instance) {
-    console.log('getPublicInstance')
+    console.log('getPublicInstance', ...arguments)
   },
 
   prepareForCommit(containerInfo) {
+    console.log('prepareForCommit', ...arguments)
     return null
   },
 
-  resetAfterCommit(containerInfo) {},
+  resetAfterCommit(containerInfo) {
+    console.log('resetAfterCommit', ...arguments)
+  },
 
   clearContainer(container) {
-    console.log('Clear!')
+    console.log('clearContainer', ...arguments)
   },
 
-  createInstance(type, props, rootContainerInstance, hostContext, internalInstanceHandle) {
-    // return document.createElement(type)
+  createInstance(
+    typeName: keyof reactgpu.IntrinsicElements,
+    props,
+    rootContainerInstance,
+    hostContext,
+    internalInstanceHandle
+  ) {
+    console.log('createInstance', ...arguments)
+    const type = intrinsicElementNameToType[typeName]
+    if (type === undefined) {
+      throw new Error(`unknown element type <${typeName}>`)
+    }
+    return {
+      type,
+      children: []
+    }
   },
 
-  appendInitialChild(parentInstance, child) {
-    // parentInstance.appendChild(child)
+  appendInitialChild(parent, child: webgpu.Descriptor) {
+    console.log('appendInitialChild', ...arguments)
+    if (allowedParents[child.type] !== parent.type) {
+      console.log('error!')
+      throw new Error(`<${typeName(child.type)}> cannot be a child of <${typeName(parent.type)}>`)
+    } else {
+      parent.children.push(child)
+    }
   },
 
   finalizeInitialChildren(domElement, type, props, rootContainerInstance, hostContext) {
-    // const { children, ...otherProps } = props
-    // Object.keys(otherProps).forEach(attr => {
-    //   if (attr === 'className') {
-    //     domElement.class = otherProps[attr]
-    //   } else if (attr === 'onClick') {
-    //     const listener = otherProps[attr]
-    //     if (domElement.__ourVeryHackCacheOfEventListeners) {
-    //       domElement.__ourVeryHackCacheOfEventListeners.push(listener)
-    //     } else {
-    //       domElement.__ourVeryHackCacheOfEventListeners = [listener]
-    //     }
-    //     domElement.addEventListener('click', listener)
-    //   } else {
-    //     throw new Error("TODO: We haven't handled other properties/attributes")
-    //   }
-    // })
+    console.log('finalizeInitialChildren', ...arguments)
     return false
   },
 
   prepareUpdate(domElement, type, oldProps, newProps, rootContainerInstance, hostContext) {
-    console.log('prepareUpdate')
-
-    // const propKeys = new Set(
-    //   Object.keys(newProps).concat(
-    //     Object.keys(oldProps)
-    //   )
-    // ).values();
-    // const payload = [];
-    // for (let key of propKeys) {
-    //   if (
-    //     key !== 'children' && // text children are already handled
-    //     oldProps[key] !== newProps[key]
-    //   ) {
-    //     payload.push({ [key]: newProps[key] })
-    //   }
-    // }
-    // return payload;
+    console.log('prepareUpdate', ...arguments)
     return [null]
   },
 
   shouldSetTextContent(type, props) {
+    console.log('shouldSetTextContent', ...arguments)
     return false
   },
 
   createTextInstance(text, rootContainerInstance, hostContext, internalInstanceHandle) {
-    return document.createTextNode(text)
+    console.log('createTextInstance', ...arguments)
+    return null
   },
 
   preparePortalMount() {},
@@ -98,54 +129,59 @@ const reconciler = ReactReconciler({
   noTimeout: 0,
 
   commitMount(domElement, type, newProps, internalInstanceHandle) {
-    console.log('commitMount')
+    console.log('commitMount', ...arguments)
   },
 
-  commitUpdate(domElement, updatePayload, type, oldProps, newProps, internalInstanceHandle) {},
+  commitUpdate(domElement, updatePayload, type, oldProps, newProps, internalInstanceHandle) {
+    console.log('commitUpdate', ...arguments)
+  },
 
-  resetTextContent(domElement) {},
+  resetTextContent(domElement) {
+    console.log('resetTextContent', ...arguments)
+  },
 
   commitTextUpdate(textInstance, oldText, newText) {
-    // textInstance.nodeValue = newText
+    console.log('commitTextUpdate', ...arguments)
   },
 
-  appendChild(parentInstance, child) {},
-
-  appendChildToContainer(container, child) {
-    // container.appendChild(child)
+  appendChild(parent, child: webgpu.Descriptor) {
+    console.log('appendChild', ...arguments)
+    parent.children.push(child)
   },
 
-  insertBefore(parentInstance, child, beforeChild) {
-    console.log('insertBefore')
+  insertBefore(parent, child: webgpu.Descriptor, beforeChild: webgpu.Descriptor) {
+    console.log('insertBefore', ...arguments)
+    parent.children.splice(parent.children.indexOf(beforeChild), 0, child)
   },
 
-  insertInContainerBefore(container, child, beforeChild) {
-    console.log('insertInContainerBefore')
+  removeChild(parent, child: webgpu.Descriptor) {
+    console.log('removeChild', ...arguments)
+    parent.children.splice(parent.children.indexOf(child), 1)
   },
 
-  removeChild(parentInstance, child) {
-    console.log('removeChild')
+  appendChildToContainer({ _gpuContext }, child: webgpu.Command) {
+    console.log('appendChildToContainer', ...arguments)
+    _gpuContext.commands.push(child)
   },
 
-  removeChildFromContainer(container, child) {
-    console.log('removeChildFromContainer')
+  insertInContainerBefore({ _gpuContext }, child: webgpu.Command, beforeChild: webgpu.Command) {
+    console.log('insertInContainerBefore', ...arguments)
+    _gpuContext.commands.splice(_gpuContext.commands.indexOf(beforeChild), 0, child)
+  },
+
+  removeChildFromContainer({ _gpuContext }, child: webgpu.Command) {
+    console.log('removeChildFromContainer', ...arguments)
+    _gpuContext.commands.splice(_gpuContext.commands.indexOf(child), 1)
   }
 })
 
-type HTMLCanvasElementWithGPU = HTMLCanvasElement & {
-  _reactGPUContainer: ReturnType<typeof reconciler.createContainer>
-}
-
-export function render(elements: React.ReactNode, canvas: HTMLCanvasElement, callback = () => {}) {
-  return reconciler.updateContainer(
-    elements,
-    ((canvas as HTMLCanvasElementWithGPU)._reactGPUContainer ||= reconciler.createContainer(
-      canvas,
-      0,
-      false,
-      null
-    )),
-    null,
-    callback
-  )
+export function render(
+  elements: React.ReactNode,
+  canvas: HTMLCanvasElement,
+  gpuContext: webgpu.Context
+) {
+  const gpuCanvas = canvas as HTMLCanvasElementWithGPU
+  gpuCanvas._gpuContext = gpuContext
+  gpuCanvas._gpuContainer ||= reconciler.createContainer(gpuCanvas, 0, false, null)
+  return reconciler.updateContainer(elements, gpuCanvas._gpuContainer, null, () => {})
 }

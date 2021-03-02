@@ -144,9 +144,18 @@ fn main_frag() -> void {
     }
   })
 
+  const bundleEncoder = ctx.device.createRenderBundleEncoder({
+    colorFormats: [ctx.colorFormat],
+    depthStencilFormat: ctx.depthStencilFormat
+  })
+  bundleEncoder.setPipeline(pipeline)
+  bundleEncoder.setBindGroup(0, bindGroup)
+  bundleEncoder.setVertexBuffer(0, vertexBuffer)
+  bundleEncoder.draw(vertexCount)
+  const bundle = bundleEncoder.finish()
+
   function draw() {
     const commandEncoder = ctx.device.createCommandEncoder()
-
     const passEncoder = commandEncoder.beginRenderPass({
       colorAttachments: [
         {
@@ -163,14 +172,9 @@ fn main_frag() -> void {
         stencilStoreOp: 'store'
       }
     })
-    passEncoder.setPipeline(pipeline)
-    passEncoder.setBindGroup(0, bindGroup)
-    passEncoder.setVertexBuffer(0, vertexBuffer)
-    passEncoder.draw(vertexCount)
+    passEncoder.executeBundles([bundle])
     passEncoder.endPass()
-    const commandBuffer = commandEncoder.finish()
-
-    ctx.device.queue.submit([commandBuffer])
+    ctx.device.queue.submit([commandEncoder.finish()])
   }
 
   function destroy() {

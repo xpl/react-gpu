@@ -34,7 +34,11 @@ function DemoApp() {
       </button>
       <AnimationLoop isRunning={isRunning}>
         <DemoComponent />
-        <GPUCanvas className="canvas-3d" />
+        <GPUCanvas className="canvas-3d">
+          <gpu-command>
+            <gpu-render-pass></gpu-render-pass>
+          </gpu-command>
+        </GPUCanvas>
       </AnimationLoop>
     </>
   )

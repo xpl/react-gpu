@@ -7,7 +7,7 @@
     "since 2017-06"
   ],
   "scripts": {
-    "start": "snowpack dev"
+    "start": "cd demo && npm start"
   },
   "repository": {
     "type": "git",

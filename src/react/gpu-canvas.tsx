@@ -43,7 +43,7 @@ export const GPUCanvas = React.memo(
     useLayoutEffect(() => {
       assignRef(forwardedRef, canvasRef)
       if (webgpuContext) {
-        render(props.children, canvasRef.current!)
+        render(props.children, canvasRef.current!, webgpuContext)
       }
     })
 

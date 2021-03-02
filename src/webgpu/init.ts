@@ -1,5 +1,18 @@
 import { PromiseType } from 'utility-types'
 
+export const enum Type {
+  Command = 1,
+  RenderPass,
+  RenderBundle,
+  Draw
+}
+
+export type Descriptor = { type: Type; children: Descriptor[] }
+export type Command = Descriptor & { children: RenderPass[] }
+export type RenderPass = Descriptor & { children: RenderBundle[] }
+export type RenderBundle = Descriptor & { children: Draw[] }
+export type Draw = Descriptor & {}
+
 export class InitError extends Error {}
 
 export type InitOptions = {
@@ -20,6 +33,7 @@ export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
   device.addEventListener('uncapturederror', error => console.error(error))
 
   const colorFormat = await context.getSwapChainPreferredFormat((adapter as unknown) as GPUDevice)
+  const depthStencilFormat: GPUTextureFormat = 'depth24plus-stencil8'
 
   const swapChain = context.configureSwapChain({
     device,
@@ -37,7 +51,7 @@ export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
       mipLevelCount: 1,
       sampleCount: 1,
       dimension: '2d',
-      format: 'depth24plus-stencil8',
+      format: depthStencilFormat,
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
       ...options?.depthStencilTexture
     }
@@ -55,6 +69,8 @@ export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
     device,
     swapChain,
     colorFormat,
+    depthStencilFormat,
+    commands: [] as Command[],
     get depthStencilAttachment() {
       return depthStencilAttachment
     },
