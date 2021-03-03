@@ -87,6 +87,7 @@ const reconciler = ReactReconciler<
     }
     return {
       type,
+      props,
       children: []
     }
   },

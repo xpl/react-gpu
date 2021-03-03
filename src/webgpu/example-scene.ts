@@ -1,4 +1,4 @@
-import { Context } from './init'
+import { Context } from './'
 
 export function exampleScene(ctx: Context) {
   const shader = ctx.device.createShaderModule({
