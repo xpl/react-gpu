@@ -8,8 +8,6 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
 - Handles boring stuff like context management, resizing, animation loop, etc.
 - Aims to provide easily composable blocks for building higher level graphics components.
 
-_Currently in the very early stages of development, nothing to see here basically :) Subscribe!_
-
 ```tsx
 <AnimationLoop isRunning={isRunning}>
   <GPUCanvas className="canvas-3d">
@@ -41,3 +39,5 @@ _Currently in the very early stages of development, nothing to see here basicall
 ```
 
 ![Screen Shot 2020-12-19 at 7 30 08 PM](https://user-images.githubusercontent.com/1707/102694248-d12a3600-4230-11eb-9223-89e9dcc1e596.jpg)
+
+_Currently in the very early stages of development, nothing to see here basically :) Subscribe!_
