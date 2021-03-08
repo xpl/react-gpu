@@ -7,8 +7,11 @@ type HTMLCanvasElementWithGPU = HTMLCanvasElement & {
 }
 
 const intrinsicElementNameToType = {
+  GPUCanvas: webgpu.Type.Root,
   'gpu-command': webgpu.Type.Command,
   'gpu-render-pass': webgpu.Type.RenderPass,
+  'gpu-color-attachment': webgpu.Type.ColorAttachment,
+  'gpu-depth-stencil-attachment': webgpu.Type.DepthStencilAttachment,
   'gpu-render-bundle': webgpu.Type.RenderBundle,
   'gpu-draw': webgpu.Type.Draw
 } as const
@@ -18,11 +21,34 @@ function typeName(x: webgpu.Type) {
 }
 
 const allowedParents = {
-  [webgpu.Type.Command]: null,
+  [webgpu.Type.Root]: null,
+  [webgpu.Type.Command]: webgpu.Type.Root,
   [webgpu.Type.RenderPass]: webgpu.Type.Command,
+  [webgpu.Type.ColorAttachment]: webgpu.Type.RenderPass,
+  [webgpu.Type.DepthStencilAttachment]: webgpu.Type.RenderPass,
   [webgpu.Type.RenderBundle]: webgpu.Type.RenderPass,
   [webgpu.Type.Draw]: webgpu.Type.RenderBundle
 } as const
+
+const defaultProps = {
+  [webgpu.Type.Root]: {},
+  [webgpu.Type.Command]: {},
+  [webgpu.Type.RenderPass]: { colorAttachments: [] },
+  [webgpu.Type.ColorAttachment]: {},
+  [webgpu.Type.DepthStencilAttachment]: {},
+  [webgpu.Type.RenderBundle]: {},
+  [webgpu.Type.Draw]: {}
+}
+
+function checkAllowedParent(child: webgpu.Descriptor, parent: webgpu.Descriptor) {
+  if (allowedParents[child.type] !== parent.type) {
+    const err = `<${typeName(child.type)}> cannot be a child of <${typeName(parent.type)}>`
+    console.error(err)
+    throw new Error(err)
+  }
+}
+
+const nil = {}
 
 const reconciler = ReactReconciler<
   string, // type
@@ -45,6 +71,10 @@ const reconciler = ReactReconciler<
   supportsHydration: false,
 
   now: performance.now,
+  queueMicrotask: queueMicrotask,
+  scheduleTimeout: setTimeout,
+  cancelTimeout: clearTimeout,
+  noTimeout: 0,
 
   getRootHostContext(rootContainerInstance) {
     console.log('getRootHostContext', ...arguments)
@@ -75,45 +105,31 @@ const reconciler = ReactReconciler<
 
   createInstance(
     typeName: keyof reactgpu.IntrinsicElements,
-    props,
+    props: object,
     rootContainerInstance,
     hostContext,
     internalInstanceHandle
   ) {
-    console.log('createInstance', ...arguments)
+    console.log('createInstance', typeName, props)
     const type = intrinsicElementNameToType[typeName]
     if (type === undefined) {
       throw new Error(`unknown element type <${typeName}>`)
     }
     return {
       type,
-      props,
+      props: { ...defaultProps[type], ...props },
+      indexInParent: -1,
       children: []
     }
   },
 
-  appendInitialChild(parent, child: webgpu.Descriptor) {
-    console.log('appendInitialChild', ...arguments)
-    if (allowedParents[child.type] !== parent.type) {
-      console.log('error!')
-      throw new Error(`<${typeName(child.type)}> cannot be a child of <${typeName(parent.type)}>`)
-    } else {
-      parent.children.push(child)
-    }
-  },
-
-  finalizeInitialChildren(domElement, type, props, rootContainerInstance, hostContext) {
-    console.log('finalizeInitialChildren', ...arguments)
+  finalizeInitialChildren(descriptor, type, props, rootContainerInstance, hostContext) {
+    // console.log('finalizeInitialChildren', ...arguments)
     return false
   },
 
-  prepareUpdate(domElement, type, oldProps, newProps, rootContainerInstance, hostContext) {
-    console.log('prepareUpdate', ...arguments)
-    return [null]
-  },
-
   shouldSetTextContent(type, props) {
-    console.log('shouldSetTextContent', ...arguments)
+    // console.log('shouldSetTextContent', ...arguments)
     return false
   },
 
@@ -124,20 +140,21 @@ const reconciler = ReactReconciler<
 
   preparePortalMount() {},
 
-  queueMicrotask: queueMicrotask,
-  scheduleTimeout: setTimeout,
-  cancelTimeout: clearTimeout,
-  noTimeout: 0,
-
-  commitMount(domElement, type, newProps, internalInstanceHandle) {
+  commitMount(descriptor, type, newProps, internalInstanceHandle) {
     console.log('commitMount', ...arguments)
   },
 
-  commitUpdate(domElement, updatePayload, type, oldProps, newProps, internalInstanceHandle) {
-    console.log('commitUpdate', ...arguments)
+  prepareUpdate(descriptor, type, oldProps, newProps, rootContainerInstance, hostContext) {
+    // console.log('prepareUpdate', ...arguments)
+    return nil
   },
 
-  resetTextContent(domElement) {
+  commitUpdate(descriptor, updatePayload, type, oldProps, newProps, internalInstanceHandle) {
+    console.log('commitUpdate', type, oldProps, newProps)
+    Object.assign(descriptor.props, newProps)
+  },
+
+  resetTextContent(descriptor) {
     console.log('resetTextContent', ...arguments)
   },
 
@@ -145,36 +162,61 @@ const reconciler = ReactReconciler<
     console.log('commitTextUpdate', ...arguments)
   },
 
-  appendChild(parent, child: webgpu.Descriptor) {
-    console.log('appendChild', ...arguments)
-    parent.children.push(child)
-  },
+  appendInitialChild: appendChild,
+  appendChild,
+  insertBefore,
+  removeChild,
 
-  insertBefore(parent, child: webgpu.Descriptor, beforeChild: webgpu.Descriptor) {
-    console.log('insertBefore', ...arguments)
-    parent.children.splice(parent.children.indexOf(beforeChild), 0, child)
-  },
-
-  removeChild(parent, child: webgpu.Descriptor) {
-    console.log('removeChild', ...arguments)
-    parent.children.splice(parent.children.indexOf(child), 1)
-  },
-
-  appendChildToContainer({ _gpuContext }, child: webgpu.Command) {
-    console.log('appendChildToContainer', ...arguments)
-    _gpuContext.commands.push(child)
-  },
-
-  insertInContainerBefore({ _gpuContext }, child: webgpu.Command, beforeChild: webgpu.Command) {
-    console.log('insertInContainerBefore', ...arguments)
-    _gpuContext.commands.splice(_gpuContext.commands.indexOf(beforeChild), 0, child)
-  },
-
-  removeChildFromContainer({ _gpuContext }, child: webgpu.Command) {
-    console.log('removeChildFromContainer', ...arguments)
-    _gpuContext.commands.splice(_gpuContext.commands.indexOf(child), 1)
-  }
+  appendChildToContainer: (container, child: webgpu.Descriptor) =>
+    appendChild(container._gpuContext, child),
+  insertInContainerBefore: (container, child: webgpu.Descriptor, beforeChild: webgpu.Descriptor) =>
+    insertBefore(container._gpuContext, child, beforeChild),
+  removeChildFromContainer: (container, child: webgpu.Descriptor) =>
+    removeChild(container._gpuContext, child)
 })
+
+function appendChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
+  console.log('appendChild', typeName(child.type), '→', typeName(parent.type))
+  checkAllowedParent(child, parent)
+  if (child.type === webgpu.Type.ColorAttachment) {
+    const pass = parent as webgpu.RenderPass
+    const attachment = child as webgpu.ColorAttachment
+    attachment.indexInParent = pass.props.colorAttachments.length
+    pass.props.colorAttachments.push(attachment.props)
+  } else if (child.type === webgpu.Type.DepthStencilAttachment) {
+    ;(parent as webgpu.RenderPass).props.depthStencilAttachment = (child as webgpu.DepthStencilAttachment).props
+  } else {
+    parent.children.push(child)
+  }
+}
+
+function insertBefore(
+  parent: webgpu.Descriptor,
+  child: webgpu.Descriptor,
+  beforeChild: webgpu.Descriptor
+) {
+  console.log('insertBefore', typeName(child.type), '→', typeName(beforeChild.type))
+  checkAllowedParent(child, parent)
+  if (
+    child.type === webgpu.Type.ColorAttachment ||
+    child.type === webgpu.Type.DepthStencilAttachment
+  ) {
+    // order doesn't matter
+  } else {
+    parent.children.splice(parent.children.indexOf(beforeChild), 0, child)
+  }
+}
+
+function removeChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
+  console.log('removeChild', typeName(child.type), '→', typeName(parent.type))
+  if (child.type === webgpu.Type.ColorAttachment) {
+    ;(parent as webgpu.RenderPass).props.colorAttachments.splice(child.indexInParent, 1)
+  } else if (child.type === webgpu.Type.DepthStencilAttachment) {
+    delete (parent as webgpu.RenderPass).props.depthStencilAttachment
+  } else {
+    parent.children.splice(parent.children.indexOf(child), 1)
+  }
+}
 
 export function render(
   elements: React.ReactNode,

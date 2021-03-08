@@ -1,14 +1,17 @@
 declare module reactgpu {
-  type Children<K extends keyof IntrinsicElements> = {
-    children?: JSX.Element | IntrinsicElements[K] | IntrinsicElements[K][] // TODO: fix
+  type IntrinsicElementChildren = {
+    children?: JSX.Element | JSX.Element[]
   }
   interface IntrinsicElements {
-    'gpu-command': GPUCommandEncoderDescriptor & Children<'gpu-render-pass'>
-    'gpu-render-pass': GPURenderPassDescriptor & Children<'gpu-render-bundle'>
-    'gpu-render-bundle': GPURenderBundleDescriptor & Children<'gpu-draw'>
+    'gpu-command': GPUCommandEncoderDescriptor & IntrinsicElementChildren
+    'gpu-render-pass': Partial<GPURenderPassDescriptor> & IntrinsicElementChildren
+    'gpu-color-attachment': GPURenderPassColorAttachmentDescriptor
+    'gpu-depth-stencil-attachment': GPURenderPassDepthStencilAttachmentDescriptor
+    'gpu-render-bundle': GPURenderBundleDescriptor & IntrinsicElementChildren
     'gpu-draw': {}
   }
 }
+
 declare module JSX {
   interface IntrinsicElements extends reactgpu.IntrinsicElements {}
 }

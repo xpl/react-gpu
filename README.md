@@ -12,22 +12,19 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
 <AnimationLoop isRunning={isRunning}>
   <GPUCanvas className="canvas-3d">
     <gpu-command>
-      <gpu-render-pass
-        colorAttachments={[
-          {
-            attachment: defaultAttachments.color,
-            loadValue: [0.25, 0.28, 0.26, 1.0],
-            storeOp: 'store'
-          }
-        ]}
-        depthStencilAttachment={{
-          attachment: defaultAttachments.depthStencil,
-          depthLoadValue: 1.0,
-          depthStoreOp: 'store',
-          stencilLoadValue: 1.0,
-          stencilStoreOp: 'store'
-        }}
-      >
+      <gpu-render-pass>
+        <gpu-color-attachment
+          attachment={defaultAttachments.color}
+          loadValue={[0.25, 0.28, 0.26, 1.0]}
+          storeOp="store"
+        />
+        <gpu-depth-stencil-attachment
+          attachment={defaultAttachments.depthStencil}
+          depthLoadValue={1.0}
+          depthStoreOp="store"
+          stencilLoadValue={1.0}
+          stencilStoreOp="store"
+        />
         <gpu-render-bundle>
           <gpu-draw-indexed ... />
           <gpu-draw-indexed ... />

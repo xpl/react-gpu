@@ -1,22 +1,49 @@
+import { Renderer } from 'react-dom'
 import { PromiseType } from 'utility-types'
 import { loggers } from './loggers'
 
 export const enum Type {
+  Root = 0,
   Command = 1,
   RenderPass,
+  ColorAttachment,
+  DepthStencilAttachment,
   RenderBundle,
   Draw
 }
 
-export type Descriptor = { type: Type; props: unknown; children: Descriptor[] }
-export type Command = Descriptor & { props: GPURenderPassDescriptor; children: RenderPass[] }
-export type RenderPass = Descriptor & { props: GPURenderPassDescriptor; children: RenderBundle[] }
-export type RenderBundle = Descriptor & {
-  props: GPURenderBundleDescriptor
-  children: Draw[]
+type ReplaceIterableWithArray<T> = {
+  [P in keyof T]: T[P] extends string ? T[P] : T[P] extends Iterable<infer Elem> ? Elem[] : T[P]
+}
+
+export type Descriptor<T = Type, Props = object, Child = unknown> = {
+  type: T
+  indexInParent: number
+  props: ReplaceIterableWithArray<Props>
+  children: Child[]
+}
+
+export type Root = Descriptor<Type.Root, unknown, Command>
+
+export type Command = Descriptor<Type.Command, GPUCommandEncoderDescriptor, RenderPass>
+
+export type ColorAttachment = Descriptor<
+  Type.ColorAttachment,
+  GPURenderPassColorAttachmentDescriptor
+>
+
+export type DepthStencilAttachment = Descriptor<
+  Type.DepthStencilAttachment,
+  GPURenderPassDepthStencilAttachmentDescriptor
+>
+
+export type RenderPass = Descriptor<Type.RenderPass, GPURenderPassDescriptor, RenderBundle>
+
+export type RenderBundle = Descriptor<Type.RenderBundle, GPURenderBundleDescriptor, Draw> & {
   bundle: GPURenderBundle
 }
-export type Draw = Descriptor & {}
+
+export type Draw = Descriptor<Type.Draw> & {}
 
 export class InitError extends Error {}
 
@@ -78,40 +105,42 @@ export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
 
   function encodeAndSubmit() {
     const commandBuffers: GPUCommandBuffer[] = []
+    const swapChainAttachment = swapChain.getCurrentTexture().createView()
 
     for (const command of commands) {
-      const commandEncoder = device.createCommandEncoder()
+      const commandEncoder = device.createCommandEncoder(command.props)
       for (const renderPass of command.children) {
-        const swapChainAttachment = swapChain.getCurrentTexture().createView()
-
-        for (const a of renderPass.props.colorAttachments || []) {
-          if (a.attachment === defaultAttachments.color) {
-            a.attachment = swapChainAttachment
-          }
-        }
-        if (
-          renderPass.props.depthStencilAttachment?.attachment === defaultAttachments.depthStencil
-        ) {
-          renderPass.props.depthStencilAttachment.attachment = depthStencilAttachment
-        }
-
-        const passEncoder = commandEncoder.beginRenderPass(renderPass.props)
-        passEncoder.executeBundles(renderPass.children.map((x: RenderBundle) => x.bundle))
-        passEncoder.endPass()
-
-        for (const a of renderPass.props.colorAttachments || []) {
-          if (a.attachment === swapChainAttachment) {
-            a.attachment = defaultAttachments.color
-          }
-        }
-        if (renderPass.props.depthStencilAttachment?.attachment === depthStencilAttachment) {
-          renderPass.props.depthStencilAttachment.attachment = defaultAttachments.depthStencil
-        }
+        withActualAttachments(renderPass.props, swapChainAttachment, depthStencilAttachment, () => {
+          const passEncoder = commandEncoder.beginRenderPass(renderPass.props)
+          passEncoder.executeBundles(renderPass.children.map((x: RenderBundle) => x.bundle))
+          passEncoder.endPass()
+        })
       }
       commandBuffers.push(commandEncoder.finish())
     }
 
     device.queue.submit(commandBuffers)
+  }
+
+  function withActualAttachments(
+    renderPass: GPURenderPassDescriptor,
+    colorAttachment: GPUTextureView,
+    depthStencilAttachment: GPUTextureView,
+    encodePass: () => void
+  ) {
+    for (const a of renderPass.colorAttachments || []) {
+      if (a.attachment === defaultAttachments.color) a.attachment = colorAttachment
+    }
+    if (renderPass.depthStencilAttachment?.attachment === defaultAttachments.depthStencil) {
+      renderPass.depthStencilAttachment.attachment = depthStencilAttachment
+    }
+    encodePass()
+    for (const a of renderPass.colorAttachments || []) {
+      if (a.attachment === colorAttachment) a.attachment = defaultAttachments.color
+    }
+    if (renderPass.depthStencilAttachment?.attachment === depthStencilAttachment) {
+      renderPass.depthStencilAttachment.attachment = defaultAttachments.depthStencil
+    }
   }
 
   log.debug('WebGPU initialized')
@@ -123,7 +152,10 @@ export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
     swapChain,
     colorFormat,
     depthStencilFormat,
-    commands,
+    type: Type.Root,
+    props: {},
+    indexInParent: -1,
+    children: commands,
     get depthStencilAttachment() {
       return depthStencilAttachment
     },
