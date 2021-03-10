@@ -33,12 +33,12 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
               depthCompare="less"
             >
               <gpu-color-state
-                alphaBlendOperation="add"
-                alphaBlendSrcFactor="src-alpha"
-                alphaBlendDstFactor="one-minus-src-alpha"
-                colorBlendOperation="add"
-                colorBlendSrcFactor="src-alpha"
-                colorBlendDstFactor="one-minus-src-alpha"
+                alphaOp="add"
+                alphaSrc="src-alpha"
+                alphaDst="one-minus-src-alpha"
+                colorOp="add"
+                colorSrc="src-alpha"
+                colorDst="one-minus-src-alpha"
               />
               <gpu-shader-module>{code}</gpu-shader-module>
               <gpu-bind-uniform visibility={GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT}>
