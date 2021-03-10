@@ -41,6 +41,7 @@ export type RenderPass = Descriptor<Type.RenderPass, GPURenderPassDescriptor, Re
 
 export type RenderBundle = Descriptor<Type.RenderBundle, GPURenderBundleDescriptor, Draw> & {
   bundle: GPURenderBundle
+  dirty: false
 }
 
 export type Draw = Descriptor<Type.Draw> & {}

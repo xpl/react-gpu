@@ -8,7 +8,20 @@ declare module reactgpu {
     'gpu-color-attachment': GPURenderPassColorAttachmentDescriptor
     'gpu-depth-stencil-attachment': GPURenderPassDepthStencilAttachmentDescriptor
     'gpu-render-bundle': GPURenderBundleDescriptor & IntrinsicElementChildren
-    'gpu-draw': {}
+    'gpu-render-pipeline': GPURenderPipelineDescriptor & IntrinsicElementChildren
+    'gpu-bind-group': GPUBindGroupDescriptor & IntrinsicElementChildren
+
+    // TODO
+    'gpu-draw': any
+    'gpu-pipeline': any
+    'gpu-bind-uniform': any
+    'gpu-uniform-buffer': any
+    'gpu-vertex-stage': any
+    'gpu-color-state': any
+    'gpu-vertex-buffer': any
+    'gpu-shader-module': any
+    'gpu-vertex-buffer-layout': any
+    'gpu-vertex-attribute': any
   }
 }
 
