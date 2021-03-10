@@ -104,12 +104,12 @@ function DemoApp() {
                     depthCompare="less"
                   >
                     <gpu-color-state
-                      alphaOp="add"
-                      alphaSrc="src-alpha"
-                      alphaDst="one-minus-src-alpha"
-                      colorOp="add"
-                      colorSrc="src-alpha"
-                      colorDst="one-minus-src-alpha"
+                      alphaBlendOp="add"
+                      alphaBlendSrc="src-alpha"
+                      alphaBlendDst="one-minus-src-alpha"
+                      colorBlendOp="add"
+                      colorBlendSrc="src-alpha"
+                      colorBlendDst="one-minus-src-alpha"
                     />
                     <gpu-shader-module>{code}</gpu-shader-module>
                     <gpu-bind-uniform visibility={GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT}>
