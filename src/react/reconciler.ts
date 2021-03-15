@@ -2,16 +2,20 @@ import ReactReconciler from 'react-reconciler'
 import * as webgpu from '../webgpu'
 
 type HTMLCanvasElementWithGPU = HTMLCanvasElement & {
-  _gpuContext: webgpu.Context
+  _gpuRoot: webgpu.Root
   _gpuContainer: ReturnType<typeof reconciler.createContainer>
 }
 
 const intrinsicElementNameToType = {
   GPUCanvas: webgpu.Type.Root,
+  'gpu-limits': webgpu.Type.Limits,
+  'gpu-extension': webgpu.Type.Extension,
   'gpu-command': webgpu.Type.Command,
   'gpu-render-pass': webgpu.Type.RenderPass,
   'gpu-color-attachment': webgpu.Type.ColorAttachment,
   'gpu-depth-stencil-attachment': webgpu.Type.DepthStencilAttachment,
+  'gpu-swap-chain': webgpu.Type.SwapChain,
+  'gpu-texture': webgpu.Type.Texture,
   'gpu-render-bundle': webgpu.Type.RenderBundle,
   'gpu-pipeline': webgpu.Type.Pipeline,
   'gpu-bind-uniform': webgpu.Type.BindUniform,
@@ -30,10 +34,14 @@ function typeName(x: webgpu.Type) {
 
 const allowedParents = {
   [webgpu.Type.Root]: null,
+  [webgpu.Type.Limits]: webgpu.Type.Root,
+  [webgpu.Type.Extension]: webgpu.Type.Root,
   [webgpu.Type.Command]: webgpu.Type.Root,
   [webgpu.Type.RenderPass]: webgpu.Type.Command,
   [webgpu.Type.ColorAttachment]: webgpu.Type.RenderPass,
   [webgpu.Type.DepthStencilAttachment]: webgpu.Type.RenderPass,
+  [webgpu.Type.SwapChain]: webgpu.Type.ColorAttachment,
+  [webgpu.Type.Texture]: webgpu.Type.Texture,
   [webgpu.Type.RenderBundle]: webgpu.Type.RenderPass,
   [webgpu.Type.Pipeline]: webgpu.Type.RenderBundle,
   [webgpu.Type.BindUniform]: webgpu.Type.Pipeline,
@@ -65,7 +73,7 @@ const reconciler = ReactReconciler<
   unknown, // SuspenseInstance
   unknown, // HydratableInstance
   unknown, // PublicInstance
-  webgpu.Context, // HostContext
+  webgpu.Root, // HostContext
   unknown, // UpdatePayload
   unknown, // ChildSet
   number, // TimeoutHandle
@@ -84,7 +92,7 @@ const reconciler = ReactReconciler<
 
   getRootHostContext(rootContainerInstance) {
     console.log('getRootHostContext', ...arguments)
-    return rootContainerInstance._gpuContext
+    return rootContainerInstance._gpuRoot
   },
 
   getChildHostContext(parentHostContext, type, rootContainerInstance) {
@@ -124,7 +132,7 @@ const reconciler = ReactReconciler<
     return {
       type,
       props: { ...webgpu.defaultProps[type], ...props },
-      indexInParent: -1,
+      parent: undefined,
       children: [],
       currentRenderBundle: undefined
     }
@@ -176,29 +184,57 @@ const reconciler = ReactReconciler<
   removeChild,
 
   appendChildToContainer: (container, child: webgpu.Descriptor) =>
-    appendChild(container._gpuContext, child),
+    appendChild(container._gpuRoot, child),
   insertInContainerBefore: (container, child: webgpu.Descriptor, beforeChild: webgpu.Descriptor) =>
-    insertBefore(container._gpuContext, child, beforeChild),
+    insertBefore(container._gpuRoot, child, beforeChild),
   removeChildFromContainer: (container, child: webgpu.Descriptor) =>
-    removeChild(container._gpuContext, child)
+    removeChild(container._gpuRoot, child)
 })
+
+function orderIndependentInsertion(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
+  if (child.type === webgpu.Type.DepthStencilAttachment) {
+    ;(parent as webgpu.RenderPass).props.depthStencilAttachment = (child as webgpu.DepthStencilAttachment).props
+    return true
+  } else if (child.type === webgpu.Type.Limits) {
+    ;(parent as webgpu.Root).limits = child as webgpu.Limits
+    ;(parent as webgpu.Root).invalid = true
+    return true
+  } else if (child.type === webgpu.Type.Extension) {
+    ;(parent as webgpu.Root).extensions.push((child as webgpu.Extension).props.name)
+    ;(parent as webgpu.Root).invalid = true
+    return true
+  } else if (child.type === webgpu.Type.SwapChain) {
+    ;(parent as webgpu.Root).swapChain = child as webgpu.SwapChain
+    ;(parent as webgpu.Root).swapChainInvalid = true
+    return true
+  }
+  return false
+}
 
 function appendChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
   console.log('appendChild', typeName(child.type), '→', typeName(parent.type))
   checkAllowedParent(child, parent)
+  child.parent = parent
+  if (child.parent) removeChild(parent, child) // TODO: does it really happen?
   if (child.type === webgpu.Type.ColorAttachment) {
-    const pass = parent as webgpu.RenderPass
-    const attachment = child as webgpu.ColorAttachment
-    attachment.indexInParent = pass.props.colorAttachments.length
-    pass.props.colorAttachments.push(attachment.props)
-  } else if (child.type === webgpu.Type.DepthStencilAttachment) {
-    ;(parent as webgpu.RenderPass).props.depthStencilAttachment = (child as webgpu.DepthStencilAttachment).props
-  } else {
+    ;(parent as webgpu.RenderPass).props.colorAttachments.push(
+      (child as webgpu.ColorAttachment).props
+    )
+  } else if (!orderIndependentInsertion(parent, child)) {
     parent.children.push(child)
   }
   if ((child.currentRenderBundle = parent.currentRenderBundle) !== undefined) {
     child.currentRenderBundle.handle = undefined // invalidate
   }
+}
+
+function putBefore<T>(arr: T[], before: T, x: T, reordered: boolean) {
+  if (reordered) removeFrom(arr, x)
+  arr.splice(arr.indexOf(before), 0, x)
+}
+
+function removeFrom<T>(arr: T[], x: T) {
+  arr.splice(arr.indexOf(x), 1)
 }
 
 function insertBefore(
@@ -208,13 +244,19 @@ function insertBefore(
 ) {
   console.log('insertBefore', typeName(child.type), '→', typeName(beforeChild.type))
   checkAllowedParent(child, parent)
-  if (
-    child.type === webgpu.Type.ColorAttachment ||
-    child.type === webgpu.Type.DepthStencilAttachment
-  ) {
-    // order doesn't matter
+  const reordered = child.parent === parent
+  if (!reordered && child.parent) removeChild(parent, child) // TODO: does it really happen?
+  child.parent = parent
+  if (!reordered && orderIndependentInsertion(parent, child)) return
+  if (child.type === webgpu.Type.ColorAttachment) {
+    putBefore(
+      (parent as webgpu.RenderPass).props.colorAttachments,
+      beforeChild.props,
+      child.props,
+      reordered
+    )
   } else {
-    parent.children.splice(parent.children.indexOf(beforeChild), 0, child)
+    putBefore(parent.children, beforeChild, child, reordered)
   }
   const { currentRenderBundle } = parent
   if (child.currentRenderBundle !== currentRenderBundle) {
@@ -226,12 +268,27 @@ function insertBefore(
 
 function removeChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
   console.log('removeChild', typeName(child.type), '→', typeName(parent.type))
+  child.parent = undefined
   if (child.type === webgpu.Type.ColorAttachment) {
-    ;(parent as webgpu.RenderPass).props.colorAttachments!.splice(child.indexInParent, 1)
+    removeFrom((parent as webgpu.RenderPass).props.colorAttachments, child.props)
+    return
   } else if (child.type === webgpu.Type.DepthStencilAttachment) {
-    delete (parent as webgpu.RenderPass).props.depthStencilAttachment
+    ;(parent as webgpu.RenderPass).props.depthStencilAttachment = undefined
+    return
+  } else if (child.type === webgpu.Type.Limits) {
+    ;(parent as webgpu.Root).limits = undefined
+    ;(parent as webgpu.Root).invalid = true
+    return
+  } else if (child.type === webgpu.Type.Extension) {
+    removeFrom((parent as webgpu.Root).extensions, (child as webgpu.Extension).props.name)
+    ;(parent as webgpu.Root).invalid = true
+    return
+  } else if (child.type === webgpu.Type.SwapChain) {
+    ;(parent as webgpu.Root).swapChain = undefined
+    ;(parent as webgpu.Root).swapChainInvalid = true
+    return true
   } else {
-    parent.children.splice(parent.children.indexOf(child), 1)
+    removeFrom(parent.children, child)
   }
   if (child.currentRenderBundle !== undefined) {
     child.currentRenderBundle.handle = undefined // invalidate
@@ -239,13 +296,9 @@ function removeChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
   }
 }
 
-export function render(
-  elements: React.ReactNode,
-  canvas: HTMLCanvasElement,
-  gpuContext: webgpu.Context
-) {
+export function render(elements: React.ReactNode, canvas: HTMLCanvasElement, gpuRoot: webgpu.Root) {
   const gpuCanvas = canvas as HTMLCanvasElementWithGPU
-  gpuCanvas._gpuContext = gpuContext
+  gpuCanvas._gpuRoot = gpuRoot
   gpuCanvas._gpuContainer ||= reconciler.createContainer(gpuCanvas, 0, false, null)
   return reconciler.updateContainer(elements, gpuCanvas._gpuContainer, null, () => {})
 }

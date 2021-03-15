@@ -1,9 +1,13 @@
 export const enum Type {
   Root = 0,
+  Limits,
+  Extension,
   Command,
   RenderPass,
   ColorAttachment,
   DepthStencilAttachment,
+  SwapChain,
+  Texture,
   RenderBundle,
   Pipeline,
   BindUniform,
@@ -18,8 +22,12 @@ export const enum Type {
 
 const asDefaults = <T>(props: reactgpu.PropsMadeOptional<T>) => props
 
+export type RootProps = GPURequestAdapterOptions & { verbose: boolean }
+
 export const defaultProps = {
-  [Type.Root]: asDefaults<object>({}),
+  [Type.Root]: asDefaults<RootProps>({}),
+  [Type.Limits]: asDefaults<GPULimits>({}),
+  [Type.Extension]: asDefaults<reactgpu.ExtensionProps>({}),
   [Type.Command]: asDefaults<GPUCommandEncoderDescriptor>({}),
   [Type.RenderPass]: asDefaults<reactgpu.RenderPassProps>({ colorAttachments: [] }),
   [Type.ColorAttachment]: asDefaults<reactgpu.ColorAttachmentProps>({
@@ -28,8 +36,14 @@ export const defaultProps = {
   [Type.DepthStencilAttachment]: asDefaults<reactgpu.DepthStencilAttachmentProps>({
     attachment: (undefined as unknown) as GPUTextureView
   }),
+  [Type.SwapChain]: asDefaults<reactgpu.SwapChainProps>({}),
+  [Type.Texture]: asDefaults<reactgpu.TextureProps>({}),
   [Type.RenderBundle]: asDefaults<reactgpu.RenderBundleProps>({ colorFormats: [] }),
-  [Type.Pipeline]: asDefaults<object>({}),
+  [Type.Pipeline]: asDefaults<reactgpu.RenderPipelineProps>({
+    vertexStage: (undefined as unknown) as GPUProgrammableStageDescriptor,
+    colorStates: [],
+    format: (undefined as unknown) as GPUTextureFormat
+  }),
   [Type.BindUniform]: asDefaults<object>({}),
   [Type.UniformBuffer]: asDefaults<object>({}),
   [Type.ColorState]: asDefaults<object>({}),
@@ -44,16 +58,29 @@ const _assertDefaultPropsExhaustiveness: { [K in Type]: unknown } = defaultProps
 
 export type Descriptor<T extends Type = Type, Child = unknown> = {
   type: T
-  indexInParent: number
   props: reactgpu.ReplaceIterableWithArray<reactgpu.OriginalType<typeof defaultProps[T]>>
+  parent?: Descriptor
   children: Child[]
   currentRenderBundle?: RenderBundle
 }
 
-export type Root = Descriptor<Type.Root, Command>
+export type Root = Descriptor<Type.Root, Command> & {
+  limits?: Limits
+  extensions: GPUExtensionName[]
+  invalid: boolean
+  swapChain?: SwapChain
+  swapChainInvalid: boolean
+  canvasResized(): void
+  encodeAndSubmit(): void
+  setProps(props: RootProps): Root
+}
+export type Limits = Descriptor<Type.Limits>
+export type Extension = Descriptor<Type.Extension>
 export type Command = Descriptor<Type.Command, RenderPass>
-export type ColorAttachment = Descriptor<Type.ColorAttachment>
-export type DepthStencilAttachment = Descriptor<Type.DepthStencilAttachment>
+export type ColorAttachment = Descriptor<Type.ColorAttachment, SwapChain>
+export type DepthStencilAttachment = Descriptor<Type.DepthStencilAttachment, Texture>
+export type SwapChain = Descriptor<Type.SwapChain>
+export type Texture = Descriptor<Type.Texture>
 export type RenderPass = Descriptor<Type.RenderPass, RenderBundle>
 export type RenderBundle = Descriptor<Type.RenderBundle, Pipeline> & { handle?: GPURenderBundle }
 export type Pipeline = Descriptor<Type.Pipeline>
@@ -65,3 +92,8 @@ export type VertexBufferLayout = Descriptor<Type.VertexBufferLayout>
 export type VertexAttribute = Descriptor<Type.VertexAttribute>
 export type VertexBuffer = Descriptor<Type.VertexBuffer>
 export type Draw = Descriptor<Type.Draw>
+
+export const current = {
+  swapChain: {},
+  depthStencilTexture: {}
+}

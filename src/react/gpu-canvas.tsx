@@ -11,37 +11,44 @@ export const GPUCanvas = React.memo(
       pixelRatio?: number
       children?: React.ReactNode
       verbose?: boolean
-    },
+    } & GPURequestAdapterOptions,
     forwardedRef: React.ForwardedRef<HTMLCanvasElement | null>
   ) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null)
     const observedSize = useObservedClientSize(canvasRef)
-    const [webgpuContext, setWebgpuContext] = useState<webgpu.Context | null>(null)
+    const [gpuRoot, setGPURoot] = useState<webgpu.Root | null>(null)
 
     const { pixelRatio = window.devicePixelRatio } = props
 
     useLayoutEffect(() => {
-      webgpu.init(canvasRef.current!, { verbose: props.verbose || false }).then(setWebgpuContext)
-    }, [props.verbose])
+      if (canvasRef.current) setGPURoot(webgpu.root(canvasRef.current))
+    }, [canvasRef.current])
+
+    useLayoutEffect(() => {
+      gpuRoot?.setProps({
+        verbose: props.verbose || false,
+        powerPreference: props.powerPreference
+      })
+    }, [gpuRoot, props.verbose, props.powerPreference])
 
     useLayoutEffect(() => {
       assignRef(forwardedRef, canvasRef)
-      if (webgpuContext) {
-        render(props.children, canvasRef.current!, webgpuContext)
+      if (gpuRoot) {
+        render(props.children, canvasRef.current!, gpuRoot)
       }
     })
 
     useLayoutEffect(() => {
-      if (webgpuContext) {
+      if (gpuRoot) {
         canvasRef.current!.width = observedSize[0] * pixelRatio
         canvasRef.current!.height = observedSize[1] * pixelRatio
-        webgpuContext.canvasResized()
-        webgpuContext.encodeAndSubmit()
+        gpuRoot.canvasResized()
+        gpuRoot.encodeAndSubmit()
       }
-    }, [observedSize, pixelRatio, webgpuContext])
+    }, [gpuRoot, observedSize, pixelRatio])
 
     useAnimationLoop(() => {
-      webgpuContext?.encodeAndSubmit()
+      gpuRoot?.encodeAndSubmit()
     })
 
     return <canvas ref={canvasRef} className={props.className} />

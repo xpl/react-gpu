@@ -2,7 +2,7 @@ import 'panic-overlay'
 
 import React, { useEffect, useRef, useState } from 'react'
 import { render } from 'react-dom'
-import { GPUCanvas, AnimationLoop, useAnimationLoop } from 'react-gpu'
+import { GPUCanvas, AnimationLoop, useAnimationLoop, current } from 'react-gpu'
 
 import 'reset-css'
 import './DemoApp.scss'
@@ -77,7 +77,10 @@ function DemoApp() {
       </button>
       <AnimationLoop isRunning={isRunning}>
         <DemoComponent />
-        <GPUCanvas className="canvas-3d" verbose>
+        <GPUCanvas className="canvas-3d" powerPreference="high-performance" verbose>
+          <gpu-extension name="pipeline-statistics-query" />
+          <gpu-extension name="timestamp-query" />
+          <gpu-swap-chain format="preferred" usage={GPUTextureUsage.RENDER_ATTACHMENT} />
           <gpu-command>
             <gpu-render-pass>
               <gpu-color-attachment loadValue={[0.25, 0.28, 0.26, 1.0]} storeOp="store" />
@@ -86,7 +89,15 @@ function DemoApp() {
                 depthStoreOp="store"
                 stencilLoadValue={1.0}
                 stencilStoreOp="store"
-              />
+              >
+                <gpu-texture
+                  mipLevelCount={1}
+                  sampleCount={1}
+                  dimension="2d"
+                  format="depth24plus-stencil8"
+                  usage={GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC}
+                />
+              </gpu-depth-stencil-attachment>
               <gpu-render-bundle>
                 <gpu-pipeline
                   primitiveTopology="line-list"

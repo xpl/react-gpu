@@ -11,9 +11,9 @@ declare module reactgpu {
 
   type PropsMadeOptional<T> = T extends { __madeOptional?: infer U }
     ? unknown extends U
-      ? T
+      ? Partial<T> & { __originalType?: T }
       : U
-    : T
+    : Partial<T> & { __originalType?: T }
 
   type OriginalType<T> = T extends { __originalType?: infer U } ? (unknown extends U ? T : U) : T
 
@@ -24,9 +24,20 @@ declare module reactgpu {
     'attachment'
   >
 
+  type TextureProps = Omit<GPUTextureDescriptor, 'size'> & Partial<GPUExtent3DDict>
+
+  type SwapChainProps = Omit<GPUSwapChainDescriptor, 'device' | 'format'> & {
+    format: GPUTextureFormat | 'preferred'
+  }
+
   type RenderPassProps = Optional<
     GPURenderPassDescriptor,
     'colorAttachments' | 'depthStencilAttachment'
+  >
+
+  type RenderPipelineProps = Optional<
+    GPURenderPipelineDescriptor & GPURasterizationStateDescriptor & GPUDepthStencilStateDescriptor,
+    'vertexStage' | 'colorStates' | 'format'
   >
 
   type RenderBundleProps = Optional<GPURenderBundleEncoderDescriptor, 'colorFormats'>
@@ -35,13 +46,19 @@ declare module reactgpu {
     children?: JSX.Element | JSX.Element[]
   }
 
+  type ExtensionProps = { name: GPUExtensionName }
+
   interface IntrinsicElements {
+    'gpu-extension': ExtensionProps
+    'gpu-limits': GPULimits
     'gpu-command': GPUCommandEncoderDescriptor & IntrinsicElementChildren
     'gpu-render-pass': RenderPassProps & IntrinsicElementChildren
-    'gpu-color-attachment': ColorAttachmentProps
-    'gpu-depth-stencil-attachment': DepthStencilAttachmentProps
+    'gpu-color-attachment': ColorAttachmentProps & IntrinsicElementChildren
+    'gpu-depth-stencil-attachment': DepthStencilAttachmentProps & IntrinsicElementChildren
+    'gpu-texture': TextureProps
+    'gpu-swap-chain': SwapChainProps
     'gpu-render-bundle': RenderBundleProps & IntrinsicElementChildren
-    'gpu-pipeline': GPURenderPipelineDescriptor & IntrinsicElementChildren
+    'gpu-pipeline': RenderPipelineProps & IntrinsicElementChildren
     'gpu-bind-uniform': IntrinsicElementChildren
     'gpu-color-state': IntrinsicElementChildren
     'gpu-shader-module': IntrinsicElementChildren

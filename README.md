@@ -9,53 +9,58 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
 - Aims to provide easily composable blocks for building higher level graphics components.
 
 ```tsx
-<AnimationLoop isRunning={isRunning}>
-  <GPUCanvas className="canvas-3d">
-    <gpu-command>
-      <gpu-render-pass>
-        <gpu-color-attachment
-          loadValue={[0.25, 0.28, 0.26, 1.0]}
-          storeOp="store"
+<GPUCanvas className="canvas-3d" powerPreference="high-performance" verbose>
+  <gpu-extension name="pipeline-statistics-query" />
+  <gpu-extension name="timestamp-query" />
+  <gpu-swap-chain format="preferred" usage={GPUTextureUsage.RENDER_ATTACHMENT} />
+  <gpu-command>
+    <gpu-render-pass>
+      <gpu-color-attachment loadValue={[0.25, 0.28, 0.26, 1.0]} storeOp="store" />
+      <gpu-depth-stencil-attachment
+        depthLoadValue={1.0}
+        depthStoreOp="store"
+        stencilLoadValue={1.0}
+        stencilStoreOp="store"
+      >
+        <gpu-texture
+          mipLevelCount={1}
+          sampleCount={1}
+          dimension="2d"
+          format="depth24plus-stencil8"
+          usage={GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC}
         />
-        <gpu-depth-stencil-attachment
-          depthLoadValue={1.0}
-          depthStoreOp="store"
-          stencilLoadValue={1.0}
-          stencilStoreOp="store"
-        />
-        <gpu-render-bundle>
+      </gpu-depth-stencil-attachment>
+      <gpu-render-bundle>
+        <gpu-pipeline
+          primitiveTopology="line-list"
+          frontFace="cw"
+          cullMode="none"
+          depthWriteEnabled={true}
+          depthCompare="less"
+        >
+          <gpu-color-state
+            alphaBlendOp="add"
+            alphaBlendSrc="src-alpha"
+            alphaBlendDst="one-minus-src-alpha"
+            colorBlendOp="add"
+            colorBlendSrc="src-alpha"
+            colorBlendDst="one-minus-src-alpha"
+          />
+          <gpu-shader-module>{code}</gpu-shader-module>
+          <gpu-bind-uniform visibility={GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT} />
+          <gpu-vertex-buffer-layout stepMode="vertex">
+            <gpu-vertex-attribute format="float3" />
+            <gpu-vertex-attribute format="float4" />
+          </gpu-vertex-buffer-layout>
           <gpu-draw vertexCount={6}>
-            <gpu-pipeline
-              primitiveTopology="line-list"
-              frontFace="cw"
-              cullMode="none"
-              depthWriteEnabled={true}
-              depthCompare="less"
-            >
-              <gpu-color-state
-                alphaBlendOp="add"
-                alphaBlendSrc="src-alpha"
-                alphaBlendDst="one-minus-src-alpha"
-                colorBlendOp="add"
-                colorBlendSrc="src-alpha"
-                colorBlendDst="one-minus-src-alpha"
-              />
-              <gpu-shader-module>{code}</gpu-shader-module>
-              <gpu-bind-uniform visibility={GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT}>
-                <gpu-uniform-buffer>{uniformData}</gpu-uniform-buffer>
-              </gpu-bind-uniform>
-              <gpu-vertex-buffer-layout>
-                <gpu-vertex-attribute format="float3" />
-                <gpu-vertex-attribute format="float4" />
-              </gpu-vertex-buffer-layout>
-            </gpu-pipeline>
+            <gpu-uniform-buffer>{uniformData}</gpu-uniform-buffer>
             <gpu-vertex-buffer>{vertexData}</gpu-vertex-buffer>
           </gpu-draw>
-        </gpu-render-bundle>
-      </gpu-render-pass>
-    </gpu-command>
-  </GPUCanvas>
-</AnimationLoop>
+        </gpu-pipeline>
+      </gpu-render-bundle>
+    </gpu-render-pass>
+  </gpu-command>
+</GPUCanvas>
 ```
 
 ![Screen Shot 2020-12-19 at 7 30 08 PM](https://user-images.githubusercontent.com/1707/102694248-d12a3600-4230-11eb-9223-89e9dcc1e596.jpg)
