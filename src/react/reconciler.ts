@@ -13,7 +13,7 @@ const intrinsicElementNameToType = {
   'gpu-color-attachment': webgpu.Type.ColorAttachment,
   'gpu-depth-stencil-attachment': webgpu.Type.DepthStencilAttachment,
   'gpu-render-bundle': webgpu.Type.RenderBundle,
-  'gpu-render-pipeline': webgpu.Type.RenderPipeline,
+  'gpu-pipeline': webgpu.Type.Pipeline,
   'gpu-bind-uniform': webgpu.Type.BindUniform,
   'gpu-uniform-buffer': webgpu.Type.UniformBuffer,
   'gpu-color-state': webgpu.Type.ColorState,
@@ -35,13 +35,13 @@ const allowedParents = {
   [webgpu.Type.ColorAttachment]: webgpu.Type.RenderPass,
   [webgpu.Type.DepthStencilAttachment]: webgpu.Type.RenderPass,
   [webgpu.Type.RenderBundle]: webgpu.Type.RenderPass,
-  [webgpu.Type.RenderPipeline]: webgpu.Type.RenderBundle,
-  [webgpu.Type.BindUniform]: webgpu.Type.RenderPipeline,
-  [webgpu.Type.ColorState]: webgpu.Type.RenderPipeline,
-  [webgpu.Type.ShaderModule]: webgpu.Type.RenderPipeline,
-  [webgpu.Type.VertexBufferLayout]: webgpu.Type.RenderPipeline,
+  [webgpu.Type.Pipeline]: webgpu.Type.RenderBundle,
+  [webgpu.Type.BindUniform]: webgpu.Type.Pipeline,
+  [webgpu.Type.ColorState]: webgpu.Type.Pipeline,
+  [webgpu.Type.ShaderModule]: webgpu.Type.Pipeline,
+  [webgpu.Type.VertexBufferLayout]: webgpu.Type.Pipeline,
   [webgpu.Type.VertexAttribute]: webgpu.Type.VertexBufferLayout,
-  [webgpu.Type.Draw]: webgpu.Type.RenderPipeline,
+  [webgpu.Type.Draw]: webgpu.Type.Pipeline,
   [webgpu.Type.UniformBuffer]: webgpu.Type.Draw,
   [webgpu.Type.VertexBuffer]: webgpu.Type.Draw
 } as const
@@ -189,8 +189,8 @@ function appendChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
   if (child.type === webgpu.Type.ColorAttachment) {
     const pass = parent as webgpu.RenderPass
     const attachment = child as webgpu.ColorAttachment
-    attachment.indexInParent = pass.props.colorAttachments!.length
-    pass.props.colorAttachments!.push(attachment.props)
+    attachment.indexInParent = pass.props.colorAttachments.length
+    pass.props.colorAttachments.push(attachment.props)
   } else if (child.type === webgpu.Type.DepthStencilAttachment) {
     ;(parent as webgpu.RenderPass).props.depthStencilAttachment = (child as webgpu.DepthStencilAttachment).props
   } else {

@@ -1,9 +1,21 @@
 declare module reactgpu {
-  type Optional<T, K> = Omit<T, K> &
-    Partial<Pick<T, K>> & { __originalType: T; __madeOptional?: Pick<T, K> }
+  type ReplaceIterableWithArray<T> = {
+    [P in keyof T]: T[P] extends string ? T[P] : T[P] extends Iterable<infer Elem> ? Elem[] : T[P]
+  }
 
-  type PropsMadeOptional<T> = T extends { __madeOptional?: infer U } ? U : T
-  type OriginalType<T> = T extends { __originalType?: infer U } ? U : T
+  type Optional<T, K> = Omit<T, K> &
+    Partial<Pick<T, K>> & {
+      __originalType?: T
+      __madeOptional?: Pick<T, K> & { __originalType?: T }
+    }
+
+  type PropsMadeOptional<T> = T extends { __madeOptional?: infer U }
+    ? unknown extends U
+      ? T
+      : U
+    : T
+
+  type OriginalType<T> = T extends { __originalType?: infer U } ? (unknown extends U ? T : U) : T
 
   type ColorAttachmentProps = Optional<GPURenderPassColorAttachmentDescriptor, 'attachment'>
 
@@ -29,7 +41,7 @@ declare module reactgpu {
     'gpu-color-attachment': ColorAttachmentProps
     'gpu-depth-stencil-attachment': DepthStencilAttachmentProps
     'gpu-render-bundle': RenderBundleProps & IntrinsicElementChildren
-    'gpu-render-pipeline': GPURenderPipelineDescriptor & IntrinsicElementChildren
+    'gpu-pipeline': GPURenderPipelineDescriptor & IntrinsicElementChildren
     'gpu-bind-uniform': IntrinsicElementChildren
     'gpu-color-state': IntrinsicElementChildren
     'gpu-shader-module': IntrinsicElementChildren

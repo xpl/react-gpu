@@ -67,7 +67,7 @@ export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
       for (const renderPass of command.children) {
         injectDefaults(renderPass.props, swapChainAttachment, depthStencilAttachment, props => {
           const passEncoder = commandEncoder.beginRenderPass(props)
-          passEncoder.executeBundles(renderPass.children.map(obtainRenderBundle))
+          passEncoder.executeBundles(renderPass.children.map(encodeRenderBundleIfNeeded))
           passEncoder.endPass()
         })
       }
@@ -77,7 +77,7 @@ export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
     device.queue.submit(commandBuffers)
   }
 
-  function obtainRenderBundle(rb: RenderBundle) {
+  function encodeRenderBundleIfNeeded(rb: RenderBundle) {
     if (rb.handle === undefined) {
       const encoder = device.createRenderBundleEncoder(rb.props)
       rb.handle = encoder.finish()

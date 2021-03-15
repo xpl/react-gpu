@@ -5,7 +5,7 @@ export const enum Type {
   ColorAttachment,
   DepthStencilAttachment,
   RenderBundle,
-  RenderPipeline,
+  Pipeline,
   BindUniform,
   UniformBuffer,
   ColorState,
@@ -15,12 +15,6 @@ export const enum Type {
   VertexBuffer,
   Draw
 }
-
-type ReplaceIterableWithArray<T> = {
-  [P in keyof T]: T[P] extends string ? T[P] : T[P] extends Iterable<infer Elem> ? Elem[] : T[P]
-}
-
-type DefaultProps<T, U = ReplaceIterableWithArray<T>> = { __originalType?: U } & Partial<U>
 
 const asDefaults = <T>(props: reactgpu.PropsMadeOptional<T>) => props
 
@@ -35,7 +29,7 @@ export const defaultProps = {
     attachment: (undefined as unknown) as GPUTextureView
   }),
   [Type.RenderBundle]: asDefaults<reactgpu.RenderBundleProps>({ colorFormats: [] }),
-  [Type.RenderPipeline]: asDefaults<object>({}),
+  [Type.Pipeline]: asDefaults<object>({}),
   [Type.BindUniform]: asDefaults<object>({}),
   [Type.UniformBuffer]: asDefaults<object>({}),
   [Type.ColorState]: asDefaults<object>({}),
@@ -51,7 +45,7 @@ const _assertDefaultPropsExhaustiveness: { [K in Type]: unknown } = defaultProps
 export type Descriptor<T extends Type = Type, Child = unknown> = {
   type: T
   indexInParent: number
-  props: reactgpu.OriginalType<typeof defaultProps[T]>
+  props: reactgpu.ReplaceIterableWithArray<reactgpu.OriginalType<typeof defaultProps[T]>>
   children: Child[]
   currentRenderBundle?: RenderBundle
 }
@@ -62,7 +56,7 @@ export type ColorAttachment = Descriptor<Type.ColorAttachment>
 export type DepthStencilAttachment = Descriptor<Type.DepthStencilAttachment>
 export type RenderPass = Descriptor<Type.RenderPass, RenderBundle>
 export type RenderBundle = Descriptor<Type.RenderBundle, Pipeline> & { handle?: GPURenderBundle }
-export type Pipeline = Descriptor<Type.RenderPipeline>
+export type Pipeline = Descriptor<Type.Pipeline>
 export type BindUniform = Descriptor<Type.BindUniform>
 export type UniformBuffer = Descriptor<Type.UniformBuffer>
 export type ColorState = Descriptor<Type.ColorState>
