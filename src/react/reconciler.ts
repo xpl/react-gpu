@@ -13,6 +13,14 @@ const intrinsicElementNameToType = {
   'gpu-color-attachment': webgpu.Type.ColorAttachment,
   'gpu-depth-stencil-attachment': webgpu.Type.DepthStencilAttachment,
   'gpu-render-bundle': webgpu.Type.RenderBundle,
+  'gpu-render-pipeline': webgpu.Type.RenderPipeline,
+  'gpu-bind-uniform': webgpu.Type.BindUniform,
+  'gpu-uniform-buffer': webgpu.Type.UniformBuffer,
+  'gpu-color-state': webgpu.Type.ColorState,
+  'gpu-shader-module': webgpu.Type.ShaderModule,
+  'gpu-vertex-buffer-layout': webgpu.Type.VertexBufferLayout,
+  'gpu-vertex-attribute': webgpu.Type.VertexAttribute,
+  'gpu-vertex-buffer': webgpu.Type.VertexBuffer,
   'gpu-draw': webgpu.Type.Draw
 } as const
 
@@ -27,18 +35,16 @@ const allowedParents = {
   [webgpu.Type.ColorAttachment]: webgpu.Type.RenderPass,
   [webgpu.Type.DepthStencilAttachment]: webgpu.Type.RenderPass,
   [webgpu.Type.RenderBundle]: webgpu.Type.RenderPass,
-  [webgpu.Type.Draw]: webgpu.Type.RenderBundle
+  [webgpu.Type.RenderPipeline]: webgpu.Type.RenderBundle,
+  [webgpu.Type.BindUniform]: webgpu.Type.RenderPipeline,
+  [webgpu.Type.ColorState]: webgpu.Type.RenderPipeline,
+  [webgpu.Type.ShaderModule]: webgpu.Type.RenderPipeline,
+  [webgpu.Type.VertexBufferLayout]: webgpu.Type.RenderPipeline,
+  [webgpu.Type.VertexAttribute]: webgpu.Type.VertexBufferLayout,
+  [webgpu.Type.Draw]: webgpu.Type.RenderPipeline,
+  [webgpu.Type.UniformBuffer]: webgpu.Type.Draw,
+  [webgpu.Type.VertexBuffer]: webgpu.Type.Draw
 } as const
-
-const defaultProps = {
-  [webgpu.Type.Root]: {},
-  [webgpu.Type.Command]: {},
-  [webgpu.Type.RenderPass]: { colorAttachments: [] },
-  [webgpu.Type.ColorAttachment]: {},
-  [webgpu.Type.DepthStencilAttachment]: {},
-  [webgpu.Type.RenderBundle]: {},
-  [webgpu.Type.Draw]: {}
-}
 
 function checkAllowedParent(child: webgpu.Descriptor, parent: webgpu.Descriptor) {
   if (allowedParents[child.type] !== parent.type) {
@@ -109,7 +115,7 @@ const reconciler = ReactReconciler<
     rootContainerInstance,
     hostContext,
     internalInstanceHandle
-  ) {
+  ): webgpu.Descriptor {
     console.log('createInstance', typeName, props)
     const type = intrinsicElementNameToType[typeName]
     if (type === undefined) {
@@ -117,9 +123,10 @@ const reconciler = ReactReconciler<
     }
     return {
       type,
-      props: { ...defaultProps[type], ...props },
+      props: { ...webgpu.defaultProps[type], ...props },
       indexInParent: -1,
-      children: []
+      children: [],
+      currentRenderBundle: undefined
     }
   },
 
@@ -145,6 +152,7 @@ const reconciler = ReactReconciler<
   },
 
   prepareUpdate(descriptor, type, oldProps, newProps, rootContainerInstance, hostContext) {
+    // checks if props changed and whether a `commitUpdate` is needed
     // console.log('prepareUpdate', ...arguments)
     return nil
   },
@@ -188,6 +196,9 @@ function appendChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
   } else {
     parent.children.push(child)
   }
+  if ((child.currentRenderBundle = parent.currentRenderBundle) !== undefined) {
+    child.currentRenderBundle.handle = undefined // invalidate
+  }
 }
 
 function insertBefore(
@@ -205,6 +216,12 @@ function insertBefore(
   } else {
     parent.children.splice(parent.children.indexOf(beforeChild), 0, child)
   }
+  const { currentRenderBundle } = parent
+  if (child.currentRenderBundle !== currentRenderBundle) {
+    if ((child.currentRenderBundle = currentRenderBundle) !== undefined) {
+      currentRenderBundle!.handle = undefined // invalidate
+    }
+  }
 }
 
 function removeChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
@@ -215,6 +232,10 @@ function removeChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
     delete (parent as webgpu.RenderPass).props.depthStencilAttachment
   } else {
     parent.children.splice(parent.children.indexOf(child), 1)
+  }
+  if (child.currentRenderBundle !== undefined) {
+    child.currentRenderBundle.handle = undefined // invalidate
+    child.currentRenderBundle = undefined
   }
 }
 

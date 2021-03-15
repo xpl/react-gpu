@@ -10,7 +10,7 @@ export const GPUCanvas = React.memo(
       className?: string
       pixelRatio?: number
       children?: React.ReactNode
-      options?: webgpu.InitOptions
+      verbose?: boolean
     },
     forwardedRef: React.ForwardedRef<HTMLCanvasElement | null>
   ) {
@@ -21,8 +21,8 @@ export const GPUCanvas = React.memo(
     const { pixelRatio = window.devicePixelRatio } = props
 
     useLayoutEffect(() => {
-      webgpu.init(canvasRef.current!, props.options).then(setWebgpuContext)
-    }, [props.options])
+      webgpu.init(canvasRef.current!, { verbose: props.verbose || false }).then(setWebgpuContext)
+    }, [props.verbose])
 
     useLayoutEffect(() => {
       assignRef(forwardedRef, canvasRef)

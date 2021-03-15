@@ -20,8 +20,6 @@ function DemoComponent() {
   )
 }
 
-const options = { verbose: true }
-
 // prettier-ignore
 const vertexData = [
   /* position */ 0, 0, 0, /* color */ 1, 0, 0, 1,
@@ -79,7 +77,7 @@ function DemoApp() {
       </button>
       <AnimationLoop isRunning={isRunning}>
         <DemoComponent />
-        <GPUCanvas className="canvas-3d" options={options}>
+        <GPUCanvas className="canvas-3d" verbose>
           <gpu-command>
             <gpu-render-pass>
               <gpu-color-attachment loadValue={[0.25, 0.28, 0.26, 1.0]} storeOp="store" />
@@ -90,33 +88,32 @@ function DemoApp() {
                 stencilStoreOp="store"
               />
               <gpu-render-bundle>
-                <gpu-draw vertexCount={6}>
-                  <gpu-pipeline
-                    primitiveTopology="line-list"
-                    frontFace="cw"
-                    cullMode="none"
-                    depthWriteEnabled={true}
-                    depthCompare="less"
-                  >
-                    <gpu-color-state
-                      alphaBlendOp="add"
-                      alphaBlendSrc="src-alpha"
-                      alphaBlendDst="one-minus-src-alpha"
-                      colorBlendOp="add"
-                      colorBlendSrc="src-alpha"
-                      colorBlendDst="one-minus-src-alpha"
-                    />
-                    <gpu-shader-module>{code}</gpu-shader-module>
-                    <gpu-bind-uniform visibility={GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT}>
-                      <gpu-uniform-buffer>{uniformData}</gpu-uniform-buffer>
-                    </gpu-bind-uniform>
-                    <gpu-vertex-buffer-layout stepMode="vertex">
-                      <gpu-vertex-attribute format="float3" />
-                      <gpu-vertex-attribute format="float4" />
-                    </gpu-vertex-buffer-layout>
-                  </gpu-pipeline>
-                  <gpu-vertex-buffer>{vertexData}</gpu-vertex-buffer>
-                </gpu-draw>
+                <gpu-pipeline
+                  primitiveTopology="line-list"
+                  frontFace="cw"
+                  cullMode="none"
+                  depthWriteEnabled={true}
+                  depthCompare="less"
+                >
+                  <gpu-color-state
+                    alphaBlendOp="add"
+                    alphaBlendSrc="src-alpha"
+                    alphaBlendDst="one-minus-src-alpha"
+                    colorBlendOp="add"
+                    colorBlendSrc="src-alpha"
+                    colorBlendDst="one-minus-src-alpha"
+                  />
+                  <gpu-shader-module>{code}</gpu-shader-module>
+                  <gpu-bind-uniform visibility={GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT} />
+                  <gpu-vertex-buffer-layout stepMode="vertex">
+                    <gpu-vertex-attribute format="float3" />
+                    <gpu-vertex-attribute format="float4" />
+                  </gpu-vertex-buffer-layout>
+                  <gpu-draw vertexCount={6}>
+                    <gpu-uniform-buffer>{uniformData}</gpu-uniform-buffer>
+                    <gpu-vertex-buffer>{vertexData}</gpu-vertex-buffer>
+                  </gpu-draw>
+                </gpu-pipeline>
               </gpu-render-bundle>
             </gpu-render-pass>
           </gpu-command>

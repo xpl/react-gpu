@@ -1,5 +1,9 @@
 declare module reactgpu {
-  type Optional<T, K> = Omit<T, K> & Partial<Pick<T, K>>
+  type Optional<T, K> = Omit<T, K> &
+    Partial<Pick<T, K>> & { __originalType: T; __madeOptional?: Pick<T, K> }
+
+  type PropsMadeOptional<T> = T extends { __madeOptional?: infer U } ? U : T
+  type OriginalType<T> = T extends { __originalType?: infer U } ? U : T
 
   type ColorAttachmentProps = Optional<GPURenderPassColorAttachmentDescriptor, 'attachment'>
 
@@ -8,37 +12,32 @@ declare module reactgpu {
     'attachment'
   >
 
-  type RenderPassProps = Omit<
-    GPUObjectDescriptorBase,
+  type RenderPassProps = Optional<
+    GPURenderPassDescriptor,
     'colorAttachments' | 'depthStencilAttachment'
-  > & {
-    colorAttachments?: ColorAttachmentProps[]
-    depthStencilAttachment?: DepthStencilAttachmentProps
-  }
+  >
+
+  type RenderBundleProps = Optional<GPURenderBundleEncoderDescriptor, 'colorFormats'>
 
   type IntrinsicElementChildren = {
     children?: JSX.Element | JSX.Element[]
   }
+
   interface IntrinsicElements {
     'gpu-command': GPUCommandEncoderDescriptor & IntrinsicElementChildren
     'gpu-render-pass': RenderPassProps & IntrinsicElementChildren
     'gpu-color-attachment': ColorAttachmentProps
     'gpu-depth-stencil-attachment': DepthStencilAttachmentProps
-    'gpu-render-bundle': GPURenderBundleDescriptor & IntrinsicElementChildren
+    'gpu-render-bundle': RenderBundleProps & IntrinsicElementChildren
     'gpu-render-pipeline': GPURenderPipelineDescriptor & IntrinsicElementChildren
-    'gpu-bind-group': GPUBindGroupDescriptor & IntrinsicElementChildren
-
-    // TODO
-    'gpu-draw': any
-    'gpu-pipeline': any
-    'gpu-bind-uniform': any
-    'gpu-uniform-buffer': any
-    'gpu-vertex-stage': any
-    'gpu-color-state': any
-    'gpu-vertex-buffer': any
-    'gpu-shader-module': any
-    'gpu-vertex-buffer-layout': any
-    'gpu-vertex-attribute': any
+    'gpu-bind-uniform': IntrinsicElementChildren
+    'gpu-color-state': IntrinsicElementChildren
+    'gpu-shader-module': IntrinsicElementChildren
+    'gpu-vertex-buffer-layout': IntrinsicElementChildren
+    'gpu-vertex-attribute': IntrinsicElementChildren
+    'gpu-draw': IntrinsicElementChildren
+    'gpu-vertex-buffer': IntrinsicElementChildren
+    'gpu-uniform-buffer': IntrinsicElementChildren
   }
 }
 

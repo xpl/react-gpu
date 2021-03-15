@@ -1,3 +1,4 @@
+import { Renderer } from 'react-dom'
 import type { PromiseType } from 'utility-types'
 import { loggers } from './loggers'
 import { Type, Command, RenderBundle } from './types'
@@ -6,6 +7,8 @@ export class InitError extends Error {}
 
 export type InitOptions = {
   verbose: boolean
+
+  // TODO: make JSX tags for those configuration sections
   adapter?: Partial<GPURequestAdapterOptions>
   device?: Partial<GPUDeviceDescriptor>
   swapChain?: Partial<GPUSwapChainDescriptor>
@@ -64,7 +67,7 @@ export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
       for (const renderPass of command.children) {
         injectDefaults(renderPass.props, swapChainAttachment, depthStencilAttachment, props => {
           const passEncoder = commandEncoder.beginRenderPass(props)
-          passEncoder.executeBundles(renderPass.children.map((x: RenderBundle) => x.bundle))
+          passEncoder.executeBundles(renderPass.children.map(obtainRenderBundle))
           passEncoder.endPass()
         })
       }
@@ -74,8 +77,16 @@ export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
     device.queue.submit(commandBuffers)
   }
 
+  function obtainRenderBundle(rb: RenderBundle) {
+    if (rb.handle === undefined) {
+      const encoder = device.createRenderBundleEncoder(rb.props)
+      rb.handle = encoder.finish()
+    }
+    return rb.handle
+  }
+
   function injectDefaults(
-    renderPass: reactgpu.RenderPassProps,
+    renderPass: GPURenderPassDescriptor,
     colorAttachment: GPUTextureView,
     depthStencilAttachment: GPUTextureView,
     encodePass: (renderPass: GPURenderPassDescriptor) => void
@@ -88,10 +99,10 @@ export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
     }
     encodePass(renderPass as GPURenderPassDescriptor)
     for (const a of renderPass.colorAttachments || []) {
-      if (a.attachment === colorAttachment) a.attachment = undefined
+      if (a.attachment === colorAttachment) a.attachment = (undefined as unknown) as GPUTextureView
     }
     if (renderPass.depthStencilAttachment?.attachment === depthStencilAttachment) {
-      renderPass.depthStencilAttachment.attachment = undefined
+      renderPass.depthStencilAttachment.attachment = (undefined as unknown) as GPUTextureView
     }
   }
 
@@ -108,6 +119,7 @@ export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
     props: {},
     indexInParent: -1,
     children: commands,
+    currentRenderBundle: undefined,
     get depthStencilAttachment() {
       return depthStencilAttachment
     },
