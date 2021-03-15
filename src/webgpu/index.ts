@@ -1,50 +1,6 @@
-import { Renderer } from 'react-dom'
-import { PromiseType } from 'utility-types'
+import type { PromiseType } from 'utility-types'
 import { loggers } from './loggers'
-
-export const enum Type {
-  Root = 0,
-  Command = 1,
-  RenderPass,
-  ColorAttachment,
-  DepthStencilAttachment,
-  RenderBundle,
-  Draw
-}
-
-type ReplaceIterableWithArray<T> = {
-  [P in keyof T]: T[P] extends string ? T[P] : T[P] extends Iterable<infer Elem> ? Elem[] : T[P]
-}
-
-export type Descriptor<T = Type, Props = object, Child = unknown> = {
-  type: T
-  indexInParent: number
-  props: ReplaceIterableWithArray<Props>
-  children: Child[]
-}
-
-export type Root = Descriptor<Type.Root, unknown, Command>
-
-export type Command = Descriptor<Type.Command, GPUCommandEncoderDescriptor, RenderPass>
-
-export type ColorAttachment = Descriptor<
-  Type.ColorAttachment,
-  GPURenderPassColorAttachmentDescriptor
->
-
-export type DepthStencilAttachment = Descriptor<
-  Type.DepthStencilAttachment,
-  GPURenderPassDepthStencilAttachmentDescriptor
->
-
-export type RenderPass = Descriptor<Type.RenderPass, GPURenderPassDescriptor, RenderBundle>
-
-export type RenderBundle = Descriptor<Type.RenderBundle, GPURenderBundleDescriptor, Draw> & {
-  bundle: GPURenderBundle
-  dirty: false
-}
-
-export type Draw = Descriptor<Type.Draw> & {}
+import { Type, Command, RenderBundle } from './types'
 
 export class InitError extends Error {}
 
@@ -54,11 +10,6 @@ export type InitOptions = {
   device?: Partial<GPUDeviceDescriptor>
   swapChain?: Partial<GPUSwapChainDescriptor>
   depthStencilTexture?: Partial<GPUTextureDescriptor>
-}
-
-export const defaultAttachments = {
-  color: {} as GPUTextureView,
-  depthStencil: {} as GPUTextureView
 }
 
 export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
@@ -111,8 +62,8 @@ export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
     for (const command of commands) {
       const commandEncoder = device.createCommandEncoder(command.props)
       for (const renderPass of command.children) {
-        withActualAttachments(renderPass.props, swapChainAttachment, depthStencilAttachment, () => {
-          const passEncoder = commandEncoder.beginRenderPass(renderPass.props)
+        injectDefaults(renderPass.props, swapChainAttachment, depthStencilAttachment, props => {
+          const passEncoder = commandEncoder.beginRenderPass(props)
           passEncoder.executeBundles(renderPass.children.map((x: RenderBundle) => x.bundle))
           passEncoder.endPass()
         })
@@ -123,24 +74,24 @@ export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
     device.queue.submit(commandBuffers)
   }
 
-  function withActualAttachments(
-    renderPass: GPURenderPassDescriptor,
+  function injectDefaults(
+    renderPass: reactgpu.RenderPassProps,
     colorAttachment: GPUTextureView,
     depthStencilAttachment: GPUTextureView,
-    encodePass: () => void
+    encodePass: (renderPass: GPURenderPassDescriptor) => void
   ) {
     for (const a of renderPass.colorAttachments || []) {
-      if (a.attachment === defaultAttachments.color) a.attachment = colorAttachment
+      a.attachment ||= colorAttachment
     }
-    if (renderPass.depthStencilAttachment?.attachment === defaultAttachments.depthStencil) {
-      renderPass.depthStencilAttachment.attachment = depthStencilAttachment
+    if (renderPass.depthStencilAttachment) {
+      renderPass.depthStencilAttachment.attachment ||= depthStencilAttachment
     }
-    encodePass()
+    encodePass(renderPass as GPURenderPassDescriptor)
     for (const a of renderPass.colorAttachments || []) {
-      if (a.attachment === colorAttachment) a.attachment = defaultAttachments.color
+      if (a.attachment === colorAttachment) a.attachment = undefined
     }
     if (renderPass.depthStencilAttachment?.attachment === depthStencilAttachment) {
-      renderPass.depthStencilAttachment.attachment = defaultAttachments.depthStencil
+      renderPass.depthStencilAttachment.attachment = undefined
     }
   }
 
@@ -166,3 +117,5 @@ export async function init(canvas: HTMLCanvasElement, options?: InitOptions) {
 }
 
 export type Context = PromiseType<ReturnType<typeof init>>
+
+export * from './types'

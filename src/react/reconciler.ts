@@ -181,8 +181,8 @@ function appendChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
   if (child.type === webgpu.Type.ColorAttachment) {
     const pass = parent as webgpu.RenderPass
     const attachment = child as webgpu.ColorAttachment
-    attachment.indexInParent = pass.props.colorAttachments.length
-    pass.props.colorAttachments.push(attachment.props)
+    attachment.indexInParent = pass.props.colorAttachments!.length
+    pass.props.colorAttachments!.push(attachment.props)
   } else if (child.type === webgpu.Type.DepthStencilAttachment) {
     ;(parent as webgpu.RenderPass).props.depthStencilAttachment = (child as webgpu.DepthStencilAttachment).props
   } else {
@@ -210,7 +210,7 @@ function insertBefore(
 function removeChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
   console.log('removeChild', typeName(child.type), '→', typeName(parent.type))
   if (child.type === webgpu.Type.ColorAttachment) {
-    ;(parent as webgpu.RenderPass).props.colorAttachments.splice(child.indexInParent, 1)
+    ;(parent as webgpu.RenderPass).props.colorAttachments!.splice(child.indexInParent, 1)
   } else if (child.type === webgpu.Type.DepthStencilAttachment) {
     delete (parent as webgpu.RenderPass).props.depthStencilAttachment
   } else {

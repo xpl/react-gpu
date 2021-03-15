@@ -2,7 +2,7 @@ import 'panic-overlay'
 
 import React, { useEffect, useRef, useState } from 'react'
 import { render } from 'react-dom'
-import { GPUCanvas, AnimationLoop, useAnimationLoop, defaultAttachments } from 'react-gpu'
+import { GPUCanvas, AnimationLoop, useAnimationLoop } from 'react-gpu'
 
 import 'reset-css'
 import './DemoApp.scss'
@@ -82,13 +82,8 @@ function DemoApp() {
         <GPUCanvas className="canvas-3d" options={options}>
           <gpu-command>
             <gpu-render-pass>
-              <gpu-color-attachment
-                attachment={defaultAttachments.color}
-                loadValue={[0.25, 0.28, 0.26, 1.0]}
-                storeOp="store"
-              />
+              <gpu-color-attachment loadValue={[0.25, 0.28, 0.26, 1.0]} storeOp="store" />
               <gpu-depth-stencil-attachment
-                attachment={defaultAttachments.depthStencil}
                 depthLoadValue={1.0}
                 depthStoreOp="store"
                 stencilLoadValue={1.0}
