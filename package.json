@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/xpl/react-gpu#readme",
   "devDependencies": {
+    "@types/lodash": "4.14.168",
     "@types/react": "^17.0.0",
     "@types/react-dom": "^17.0.0",
     "@types/react-reconciler": "0.26.0",
