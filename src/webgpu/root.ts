@@ -1,8 +1,9 @@
 import { loggers } from './loggers'
 import { event } from './event'
-import { Type, Command, RenderBundle, Root, RootProps } from './types'
+import { Type, Command, RenderPass, RenderBundle, Root, RootProps, Texture } from './types'
 
 export class InitError extends Error {}
+export class InvalidProps extends Error {}
 
 export function root(canvas: HTMLCanvasElement): Root {
   let log = loggers.default
@@ -16,6 +17,7 @@ export function root(canvas: HTMLCanvasElement): Root {
   }
 
   const commands: Command[] = []
+  const canvasResized = event<() => void>()
 
   const root: Root = {
     type: Type.Root,
@@ -28,7 +30,7 @@ export function root(canvas: HTMLCanvasElement): Root {
     children: commands,
     currentRenderBundle: undefined,
     invalidate,
-    canvasResized: event<() => void>(),
+    canvasResized,
     encodeAndSubmit,
     setProps(props: RootProps) {
       log = loggers[props.verbose ? 'verbose' : 'default']
@@ -98,21 +100,44 @@ export function root(canvas: HTMLCanvasElement): Root {
     return swapChain.handle
   }
 
-  let depthStencilTexture: GPUTexture
-  let depthStencilAttachment: GPUTextureView
-  const depthStencilFormat: GPUTextureFormat = 'depth24plus-stencil8'
+  function validateTexture(t: Texture): GPUTextureView {
+    let { view } = t
+    if (view === undefined) {
+      const { props } = t
+      let size: number[]
+      let onResize: () => void
+      if (props.fullScreen) {
+        size = [canvas.width, canvas.height, 1]
+      } else if (props.width !== undefined) {
+        size = [props.width, props.height!, props.depthOrArrayLayers!]
+      } else {
+        throw new InvalidProps('should specify either dimensions or fullScreen for textures')
+      }
+      log.debug('createTexture', size, t.props)
+      view = t.view = (t.handle = device.createTexture({ ...t.props, size })).createView()
+      t.invalidate = () => {
+        if (t.invalidate) canvasResized.off(t.invalidate)
+        t.handle!.destroy()
+        t.handle = undefined
+        t.view = undefined
+      }
+      if (props.fullScreen) {
+        canvasResized.on(t.invalidate)
+      }
+    }
+    return view
+  }
 
   function encodeAndSubmit() {
     if (invalid) {
       validateDevice()
     } else {
       const commandBuffers: GPUCommandBuffer[] = []
-      const swapChainAttachment = validateSwapChain().getCurrentTexture().createView()
 
       for (const command of commands) {
         const commandEncoder = device.createCommandEncoder(command.props)
         for (const renderPass of command.children) {
-          injectDefaults(renderPass.props, swapChainAttachment, depthStencilAttachment, props => {
+          withAttachments(renderPass, props => {
             const passEncoder = commandEncoder.beginRenderPass(props)
             passEncoder.executeBundles(renderPass.children.map(encodeRenderBundleIfNeeded))
             passEncoder.endPass()
@@ -133,25 +158,25 @@ export function root(canvas: HTMLCanvasElement): Root {
     return rb.handle
   }
 
-  function injectDefaults(
-    renderPass: GPURenderPassDescriptor,
-    colorAttachment: GPUTextureView,
-    depthStencilAttachment: GPUTextureView,
+  function withAttachments(
+    renderPass: RenderPass,
     encodePass: (renderPass: GPURenderPassDescriptor) => void
   ) {
-    for (const a of renderPass.colorAttachments || []) {
-      a.attachment ||= colorAttachment
-    }
-    if (renderPass.depthStencilAttachment) {
-      renderPass.depthStencilAttachment.attachment ||= depthStencilAttachment
-    }
-    encodePass(renderPass as GPURenderPassDescriptor)
-    for (const a of renderPass.colorAttachments || []) {
-      if (a.attachment === colorAttachment) a.attachment = (undefined as unknown) as GPUTextureView
-    }
-    if (renderPass.depthStencilAttachment?.attachment === depthStencilAttachment) {
-      renderPass.depthStencilAttachment.attachment = (undefined as unknown) as GPUTextureView
-    }
+    const swapChainAttachment = validateSwapChain().getCurrentTexture().createView()
+    encodePass({
+      ...renderPass.props,
+      colorAttachments: renderPass.colorAttachments.map(att => ({
+        ...att.props,
+        attachment: att.children[0] ? validateTexture(att.children[0]) : swapChainAttachment
+      })),
+      depthStencilAttachment:
+        renderPass.depthStencilAttachment && renderPass.depthStencilAttachment.children[0]
+          ? {
+              ...renderPass.depthStencilAttachment.props,
+              attachment: validateTexture(renderPass.depthStencilAttachment.children[0])
+            }
+          : undefined
+    })
   }
 
   return root

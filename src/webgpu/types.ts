@@ -1,3 +1,5 @@
+import { Subtract } from 'utility-types'
+
 export const enum Type {
   Root = 0,
   Limits,
@@ -17,19 +19,20 @@ export const enum Type {
   VertexBufferLayout,
   VertexAttribute,
   VertexBuffer,
-  Draw
+  Draw,
+  MAX
 }
 
 const asDefaults = <T>(props: reactgpu.PropsMadeOptional<T>) => props
 
 export type RootProps = GPURequestAdapterOptions & { verbose: boolean }
 
-export const defaultProps = {
+export const defaultPropsMap = {
   [Type.Root]: asDefaults<RootProps>({}),
   [Type.Limits]: asDefaults<GPULimits>({}),
   [Type.Feature]: asDefaults<reactgpu.FeatureProps>({}),
   [Type.Command]: asDefaults<GPUCommandEncoderDescriptor>({}),
-  [Type.RenderPass]: asDefaults<reactgpu.RenderPassProps>({ colorAttachments: [] }),
+  [Type.RenderPass]: asDefaults<reactgpu.RenderPassProps>({}),
   [Type.ColorAttachment]: asDefaults<reactgpu.ColorAttachmentProps>({
     attachment: (undefined as unknown) as GPUTextureView
   }),
@@ -51,14 +54,20 @@ export const defaultProps = {
   [Type.VertexBufferLayout]: asDefaults<object>({}),
   [Type.VertexAttribute]: asDefaults<object>({}),
   [Type.VertexBuffer]: asDefaults<object>({}),
-  [Type.Draw]: asDefaults<object>({})
+  [Type.Draw]: asDefaults<object>({}),
+  [Type.MAX]: {}
 } as const
 
-const _assertDefaultPropsExhaustiveness: { [K in Type]: unknown } = defaultProps
+export const defaultProps = Array.from({
+  ...defaultPropsMap,
+  length: Type.MAX
+})
+
+const _assertDefaultPropsExhaustiveness: { [K in Type]: unknown } = defaultPropsMap
 
 export type Descriptor<T extends Type = Type, Child = unknown> = {
   type: T
-  props: reactgpu.ReplaceIterableWithArray<reactgpu.OriginalType<typeof defaultProps[T]>>
+  props: reactgpu.ReplaceIterableWithArray<reactgpu.OriginalType<typeof defaultPropsMap[T]>>
   parent?: Descriptor
   root?: Root
   children: Child[]
@@ -78,11 +87,18 @@ export type Root = Descriptor<Type.Root, Command> & {
 export type Limits = Descriptor<Type.Limits> & { root: Root }
 export type Feature = Descriptor<Type.Feature> & { root: Root }
 export type Command = Descriptor<Type.Command, RenderPass>
-export type ColorAttachment = Descriptor<Type.ColorAttachment, SwapChain>
+export type ColorAttachment = Descriptor<Type.ColorAttachment, Texture>
 export type DepthStencilAttachment = Descriptor<Type.DepthStencilAttachment, Texture>
 export type SwapChain = Descriptor<Type.SwapChain> & { handle?: GPUSwapChain }
-export type Texture = Descriptor<Type.Texture>
-export type RenderPass = Descriptor<Type.RenderPass, RenderBundle>
+export type Texture = Descriptor<Type.Texture> & {
+  handle?: GPUTexture
+  view?: GPUTextureView
+  invalidate?: () => void
+}
+export type RenderPass = Descriptor<Type.RenderPass, RenderBundle> & {
+  colorAttachments: ColorAttachment[]
+  depthStencilAttachment?: DepthStencilAttachment
+}
 export type RenderBundle = Descriptor<Type.RenderBundle, Pipeline> & { handle?: GPURenderBundle }
 export type Pipeline = Descriptor<Type.Pipeline>
 export type BindUniform = Descriptor<Type.BindUniform>
@@ -94,7 +110,61 @@ export type VertexAttribute = Descriptor<Type.VertexAttribute>
 export type VertexBuffer = Descriptor<Type.VertexBuffer>
 export type Draw = Descriptor<Type.Draw>
 
-export const current = {
-  swapChain: {},
-  depthStencilTexture: {}
+type Map<From> = From extends Descriptor<infer T> ? Pick<{ [K in Type]: From }, T> : never
+
+export type DescriptorType = Map<Root> &
+  Map<Limits> &
+  Map<Feature> &
+  Map<Command> &
+  Map<ColorAttachment> &
+  Map<DepthStencilAttachment> &
+  Map<SwapChain> &
+  Map<Texture> &
+  Map<RenderPass> &
+  Map<RenderBundle> &
+  Map<Pipeline> &
+  Map<BindUniform> &
+  Map<UniformBuffer> &
+  Map<ColorState> &
+  Map<ShaderModule> &
+  Map<VertexBufferLayout> &
+  Map<VertexAttribute> &
+  Map<VertexBuffer> &
+  Map<Draw> &
+  Map<Descriptor<Type.MAX>>
+
+type _AssertMapExhaustiveness = { [K in Type]: DescriptorType[Type] }
+
+const defaults: { [K in Type]: Subtract<DescriptorType[K], Descriptor> } = {
+  // @ts-ignore
+  [Type.Root]: {},
+  [Type.Limits]: {},
+  [Type.Feature]: {},
+  [Type.Command]: {},
+  [Type.RenderPass]: { colorAttachments: [] },
+  [Type.ColorAttachment]: {},
+  [Type.DepthStencilAttachment]: {},
+  [Type.SwapChain]: {},
+  [Type.Texture]: {},
+  [Type.RenderBundle]: {},
+  [Type.Pipeline]: {},
+  [Type.BindUniform]: {},
+  [Type.UniformBuffer]: {},
+  [Type.ColorState]: {},
+  [Type.ShaderModule]: {},
+  [Type.VertexBufferLayout]: {},
+  [Type.VertexAttribute]: {},
+  [Type.VertexBuffer]: {},
+  [Type.Draw]: {},
+  [Type.MAX]: {}
 }
+
+export const makeDescriptor = (type: Type, root: Root, props: object): Descriptor => ({
+  type,
+  root,
+  props: { ...defaultProps[type], ...props },
+  parent: undefined,
+  children: [],
+  currentRenderBundle: undefined,
+  ...defaults[type]
+})

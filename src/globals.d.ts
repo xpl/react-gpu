@@ -31,7 +31,7 @@ declare module reactgpu {
     format: GPUTextureFormat | 'preferred'
   }
 
-  type RenderPassProps = Optional<
+  type RenderPassProps = Omit<
     GPURenderPassDescriptor,
     'colorAttachments' | 'depthStencilAttachment'
   >

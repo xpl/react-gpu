@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useLayoutEffect, useRef } from 'react'
+import { throttle } from 'lodash'
 import { render } from './reconciler'
 import { useObservedClientSize, assignRef } from './misc'
 import * as webgpu from '../webgpu'
@@ -46,12 +47,20 @@ export const GPUCanvas = React.memo(
       }
     })
 
+    const canvasResized = useMemo(
+      () =>
+        throttle((gpuRoot: webgpu.Root, w: number, h: number, pixelRatio: number) => {
+          console.log(w, h)
+          canvasRef.current!.width = w * pixelRatio
+          canvasRef.current!.height = h * pixelRatio
+          gpuRoot.canvasResized()
+          setTimeout(() => gpuRoot.encodeAndSubmit(), 0)
+        }, 500),
+      []
+    )
+
     useLayoutEffect(() => {
-      if (gpuRoot) {
-        canvasRef.current!.width = observedSize[0] * pixelRatio
-        canvasRef.current!.height = observedSize[1] * pixelRatio
-        gpuRoot.canvasResized()
-      }
+      if (gpuRoot) canvasResized(gpuRoot, observedSize[0], observedSize[1], pixelRatio)
     }, [gpuRoot, observedSize, pixelRatio])
 
     useAnimationLoop(() => {

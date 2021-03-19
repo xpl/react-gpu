@@ -1,5 +1,6 @@
 import ReactReconciler from 'react-reconciler'
 import * as webgpu from '../webgpu'
+import { DescriptorType } from '../webgpu'
 
 type HTMLCanvasElementWithGPU = HTMLCanvasElement & {
   _gpuRoot: webgpu.Root
@@ -32,30 +33,32 @@ function typeName(x: webgpu.Type) {
   return (Object.entries(intrinsicElementNameToType).find(([, v]) => v === x) || ['unknown'])[0]
 }
 
-const allowedParents = {
-  [webgpu.Type.Root]: null,
-  [webgpu.Type.Limits]: webgpu.Type.Root,
-  [webgpu.Type.Feature]: webgpu.Type.Root,
-  [webgpu.Type.SwapChain]: webgpu.Type.Root,
-  [webgpu.Type.Command]: webgpu.Type.Root,
-  [webgpu.Type.RenderPass]: webgpu.Type.Command,
-  [webgpu.Type.ColorAttachment]: webgpu.Type.RenderPass,
-  [webgpu.Type.DepthStencilAttachment]: webgpu.Type.RenderPass,
-  [webgpu.Type.Texture]: webgpu.Type.Texture,
-  [webgpu.Type.RenderBundle]: webgpu.Type.RenderPass,
-  [webgpu.Type.Pipeline]: webgpu.Type.RenderBundle,
-  [webgpu.Type.BindUniform]: webgpu.Type.Pipeline,
-  [webgpu.Type.ColorState]: webgpu.Type.Pipeline,
-  [webgpu.Type.ShaderModule]: webgpu.Type.Pipeline,
-  [webgpu.Type.VertexBufferLayout]: webgpu.Type.Pipeline,
-  [webgpu.Type.VertexAttribute]: webgpu.Type.VertexBufferLayout,
-  [webgpu.Type.Draw]: webgpu.Type.Pipeline,
-  [webgpu.Type.UniformBuffer]: webgpu.Type.Draw,
-  [webgpu.Type.VertexBuffer]: webgpu.Type.Draw
-} as const
+const isAllowedParent = Array.from({
+  [webgpu.Type.Root]: () => false,
+  [webgpu.Type.Limits]: p => p === webgpu.Type.Root,
+  [webgpu.Type.Feature]: p => p === webgpu.Type.Root,
+  [webgpu.Type.SwapChain]: p => p === webgpu.Type.Root,
+  [webgpu.Type.Command]: p => p === webgpu.Type.Root,
+  [webgpu.Type.RenderPass]: p => p === webgpu.Type.Command,
+  [webgpu.Type.ColorAttachment]: p => p === webgpu.Type.RenderPass,
+  [webgpu.Type.DepthStencilAttachment]: p => p === webgpu.Type.RenderPass,
+  [webgpu.Type.Texture]: p => p === webgpu.Type.DepthStencilAttachment,
+  [webgpu.Type.RenderBundle]: p => p === webgpu.Type.RenderPass,
+  [webgpu.Type.Pipeline]: p => p === webgpu.Type.RenderBundle,
+  [webgpu.Type.BindUniform]: p => p === webgpu.Type.Pipeline,
+  [webgpu.Type.ColorState]: p => p === webgpu.Type.Pipeline,
+  [webgpu.Type.ShaderModule]: p => p === webgpu.Type.Pipeline,
+  [webgpu.Type.VertexBufferLayout]: p => p === webgpu.Type.Pipeline,
+  [webgpu.Type.VertexAttribute]: p => p === webgpu.Type.VertexBufferLayout,
+  [webgpu.Type.Draw]: p => p === webgpu.Type.Pipeline,
+  [webgpu.Type.UniformBuffer]: p => p === webgpu.Type.Draw,
+  [webgpu.Type.VertexBuffer]: p => p === webgpu.Type.Draw,
+  [webgpu.Type.MAX]: p => false,
+  length: webgpu.Type.MAX
+} as { [K in webgpu.Type]: (p: webgpu.Type) => boolean } & { length: number })
 
 function checkAllowedParent(child: webgpu.Descriptor, parent: webgpu.Descriptor) {
-  if (allowedParents[child.type] !== parent.type) {
+  if (!isAllowedParent[child.type]!(parent.type)) {
     const err = `<${typeName(child.type)}> cannot be a child of <${typeName(parent.type)}>`
     console.error(err)
     throw new Error(err)
@@ -135,19 +138,7 @@ const reconciler = ReactReconciler<
     if (type === undefined) {
       throw new Error(`unknown element type <${typeName}>`)
     }
-    return {
-      type,
-      root: hostContext,
-      props: { ...webgpu.defaultProps[type], ...props },
-      parent: undefined,
-      children: [],
-      currentRenderBundle: undefined
-    }
-  },
-
-  finalizeInitialChildren(descriptor, type, props, rootContainerInstance, hostContext) {
-    // console.log('finalizeInitialChildren', ...arguments)
-    return false
+    return webgpu.makeDescriptor(type, hostContext, props)
   },
 
   shouldSetTextContent(type, props) {
@@ -160,11 +151,15 @@ const reconciler = ReactReconciler<
     return null
   },
 
-  preparePortalMount() {},
-
-  commitMount(descriptor, type, newProps, internalInstanceHandle) {
-    console.log('commitMount', ...arguments)
+  resetTextContent(descriptor) {
+    console.log('resetTextContent', ...arguments)
   },
+
+  commitTextUpdate(textInstance, oldText, newText) {
+    console.log('commitTextUpdate', ...arguments)
+  },
+
+  preparePortalMount() {},
 
   prepareUpdate(
     descriptor,
@@ -174,6 +169,7 @@ const reconciler = ReactReconciler<
     rootContainerInstance,
     hostContext
   ) {
+    const childrenIndex = Object.keys(newProps).indexOf('children')
     const oldValues = Object.values(oldProps)
     const newValues = Object.values(newProps)
 
@@ -182,7 +178,7 @@ const reconciler = ReactReconciler<
 
     if (oldSize === newSize) {
       for (let i = 0; i < oldSize; i++) {
-        if (oldValues[i] !== newValues[i]) {
+        if (oldValues[i] !== newValues[i] && i !== childrenIndex) {
           return propsUpdated
         }
       }
@@ -194,24 +190,19 @@ const reconciler = ReactReconciler<
     return propsUpdated
   },
 
-  commitUpdate(child, updatePayload, type, oldProps, newProps, internalInstanceHandle) {
-    console.log('commitUpdate', type, oldProps, newProps)
+  commitUpdate(child, updatePayload, _type, oldProps, newProps, internalInstanceHandle) {
+    console.log('commitUpdate', _type, oldProps, newProps)
     Object.assign(child.props, newProps)
-    if (child.type === webgpu.Type.SwapChain) {
-      ;(child as webgpu.SwapChain).handle = undefined
-    } else if (child.type === webgpu.Type.Limits) {
-      ;(child as webgpu.Limits).root.invalidate()
-    } else if (child.type === webgpu.Type.Feature) {
-      ;(child as webgpu.Feature).root.invalidate()
+    const { type } = child
+    if (type === webgpu.Type.Texture) {
+      ;(child as DescriptorType[typeof type]).invalidate?.()
+    } else if (type === webgpu.Type.SwapChain) {
+      ;(child as DescriptorType[typeof type]).handle = undefined
+    } else if (type === webgpu.Type.Limits) {
+      ;(child as DescriptorType[typeof type]).root.invalidate()
+    } else if (type === webgpu.Type.Feature) {
+      ;(child as DescriptorType[typeof type]).root.invalidate()
     }
-  },
-
-  resetTextContent(descriptor) {
-    console.log('resetTextContent', ...arguments)
-  },
-
-  commitTextUpdate(textInstance, oldText, newText) {
-    console.log('commitTextUpdate', ...arguments)
   },
 
   appendInitialChild: appendChild,
@@ -224,19 +215,30 @@ const reconciler = ReactReconciler<
   insertInContainerBefore: (container, child: webgpu.Descriptor, beforeChild: webgpu.Descriptor) =>
     insertBefore(container._gpuRoot, child, beforeChild),
   removeChildFromContainer: (container, child: webgpu.Descriptor) =>
-    removeChild(container._gpuRoot, child)
+    removeChild(container._gpuRoot, child),
+
+  finalizeInitialChildren(descriptor, type, props, rootContainerInstance, hostContext) {
+    // console.log('finalizeInitialChildren', ...arguments)
+    return false
+  },
+
+  // This method is only called if you returned `true` from finalizeInitialChildren for this instance.
+  // It lets you do some additional work after the node is actually attached to the tree on the screen
+  // for the first time.
+  commitMount(descriptor, type, newProps, internalInstanceHandle) {}
 })
 
 function orderIndependentInsertion(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
-  if (child.type === webgpu.Type.DepthStencilAttachment) {
-    ;(parent as webgpu.RenderPass).props.depthStencilAttachment = (child as webgpu.DepthStencilAttachment).props
+  const { type } = child
+  if (type === webgpu.Type.DepthStencilAttachment) {
+    ;(parent as webgpu.RenderPass).depthStencilAttachment = child as DescriptorType[typeof type]
     return true
-  } else if (child.type === webgpu.Type.Limits) {
-    ;(parent as webgpu.Root).limits = child as webgpu.Limits
+  } else if (type === webgpu.Type.Limits) {
+    ;(parent as webgpu.Root).limits = child as DescriptorType[typeof type]
     ;(parent as webgpu.Root).invalidate()
     return true
-  } else if (child.type === webgpu.Type.SwapChain) {
-    ;(parent as webgpu.Root).swapChain = child as webgpu.SwapChain
+  } else if (type === webgpu.Type.SwapChain) {
+    ;(parent as webgpu.Root).swapChain = child as DescriptorType[typeof type]
     return true
   }
   return false
@@ -249,12 +251,11 @@ function appendChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
     throw new Error('child already has parent!')
   }
   child.parent = parent
-  if (child.type === webgpu.Type.ColorAttachment) {
-    ;(parent as webgpu.RenderPass).props.colorAttachments.push(
-      (child as webgpu.ColorAttachment).props
-    )
-  } else if (child.type === webgpu.Type.Feature) {
-    ;(parent as webgpu.Root).features.push(child as webgpu.Feature)
+  const { type } = child
+  if (type === webgpu.Type.ColorAttachment) {
+    ;(parent as webgpu.RenderPass).colorAttachments.push(child as DescriptorType[typeof type])
+  } else if (type === webgpu.Type.Feature) {
+    ;(parent as webgpu.Root).features.push(child as DescriptorType[typeof type])
   } else if (!orderIndependentInsertion(parent, child)) {
     parent.children.push(child)
   }
@@ -264,7 +265,7 @@ function appendChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
 }
 
 function putBefore<T>(arr: T[], before: T, x: T, reordered: boolean) {
-  if (reordered) removeFrom(arr, x)
+  if (reordered) removeFrom(arr, x) // if on the same array, need to remove it first
   arr.splice(arr.indexOf(before), 0, x)
 }
 
@@ -284,12 +285,7 @@ function insertBefore(
   child.parent = parent
   if (!reordered && orderIndependentInsertion(parent, child)) return
   if (child.type === webgpu.Type.ColorAttachment) {
-    putBefore(
-      (parent as webgpu.RenderPass).props.colorAttachments,
-      beforeChild.props,
-      child.props,
-      reordered
-    )
+    putBefore((parent as webgpu.RenderPass).colorAttachments, beforeChild, child, reordered)
   } else if (child.type === webgpu.Type.Feature) {
     putBefore((parent as webgpu.Root).features, beforeChild, child, reordered)
   } else {
@@ -304,21 +300,25 @@ function insertBefore(
 }
 
 function removeChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
-  console.log('removeChild', typeName(child.type), '←', typeName(parent.type), child.props)
+  const { type } = child
+  console.log('removeChild', typeName(type), '←', typeName(parent.type), child.props)
   child.parent = undefined
-  if (child.type === webgpu.Type.ColorAttachment) {
-    removeFrom((parent as webgpu.RenderPass).props.colorAttachments, child.props)
-  } else if (child.type === webgpu.Type.DepthStencilAttachment) {
-    ;(parent as webgpu.RenderPass).props.depthStencilAttachment = undefined
-  } else if (child.type === webgpu.Type.Limits) {
+  if (type === webgpu.Type.ColorAttachment) {
+    removeFrom((parent as webgpu.RenderPass).colorAttachments, child)
+  } else if (type === webgpu.Type.DepthStencilAttachment) {
+    ;(parent as webgpu.RenderPass).depthStencilAttachment = undefined
+  } else if (type === webgpu.Type.Limits) {
     ;(parent as webgpu.Root).limits = undefined
     ;(parent as webgpu.Root).invalidate()
-  } else if (child.type === webgpu.Type.Feature) {
+  } else if (type === webgpu.Type.Feature) {
     removeFrom((parent as webgpu.Root).features, child)
     ;(parent as webgpu.Root).invalidate()
-  } else if (child.type === webgpu.Type.SwapChain) {
-    ;(child as webgpu.SwapChain).handle = undefined
+  } else if (type === webgpu.Type.SwapChain) {
+    ;(child as DescriptorType[typeof type]).handle = undefined
   } else {
+    if (type === webgpu.Type.Texture) {
+      ;(child as DescriptorType[typeof type]).invalidate?.()
+    }
     removeFrom(parent.children, child)
 
     if (child.currentRenderBundle !== undefined) {
