@@ -1,4 +1,4 @@
-import { Subtract } from 'utility-types'
+import { Subtract, RequiredKeys } from 'utility-types'
 
 export const enum Type {
   Root = 0,
@@ -135,29 +135,18 @@ export type DescriptorType = Map<Root> &
 
 type _AssertMapExhaustiveness = { [K in Type]: DescriptorType[Type] }
 
-const defaults: { [K in Type]: Subtract<DescriptorType[K], Descriptor> } = {
-  // @ts-ignore
-  [Type.Root]: {},
-  [Type.Limits]: {},
-  [Type.Feature]: {},
-  [Type.Command]: {},
-  [Type.RenderPass]: { colorAttachments: [] },
-  [Type.ColorAttachment]: {},
-  [Type.DepthStencilAttachment]: {},
-  [Type.SwapChain]: {},
-  [Type.Texture]: {},
-  [Type.RenderBundle]: {},
-  [Type.Pipeline]: {},
-  [Type.BindUniform]: {},
-  [Type.UniformBuffer]: {},
-  [Type.ColorState]: {},
-  [Type.ShaderModule]: {},
-  [Type.VertexBufferLayout]: {},
-  [Type.VertexAttribute]: {},
-  [Type.VertexBuffer]: {},
-  [Type.Draw]: {},
-  [Type.MAX]: {}
+type AdditionalKeys<T extends Type> = Subtract<DescriptorType[T], Descriptor>
+
+type EmptyObject = { [K in any]: never }
+
+type NonEmptyAdditonalKeys = {
+  [K in Type as RequiredKeys<AdditionalKeys<K>> extends EmptyObject ? never : K]: AdditionalKeys<K>
 }
+
+const defaults: { [K in Type]?: object } = {
+  [Type.RenderPass]: { colorAttachments: [] },
+  [Type.Root]: (undefined as unknown) as Root // we never create root via `makeDescriptor`, so it's fine
+} as NonEmptyAdditonalKeys
 
 export const makeDescriptor = (type: Type, root: Root, props: object): Descriptor => ({
   type,
