@@ -65,6 +65,7 @@ fn main_frag() -> void {
 
 function DemoApp() {
   const [isRunning, setRunning] = useState(false)
+  const [counter, setCounter] = useState(0)
   return (
     <>
       Hello ReactGPU!{' '}
@@ -75,59 +76,21 @@ function DemoApp() {
       >
         {isRunning ? 'Stop' : 'Start'}
       </button>
+      <button
+        style={{ marginLeft: '0.5em' }}
+        onClick={() => {
+          setCounter((c) => c + 1)
+        }}
+      >
+        {counter}
+      </button>
       <AnimationLoop isRunning={isRunning}>
         <DemoComponent />
         <GPUCanvas className="canvas-3d" powerPreference="high-performance" verbose>
-          <gpu-extension name="pipeline-statistics-query" />
-          <gpu-extension name="timestamp-query" />
+          <gpu-feature name="pipeline-statistics-query" />
+          <gpu-feature name="texture-compression-bc" />
           <gpu-swap-chain format="preferred" usage={GPUTextureUsage.RENDER_ATTACHMENT} />
-          <gpu-command>
-            <gpu-render-pass>
-              <gpu-color-attachment loadValue={[0.25, 0.28, 0.26, 1.0]} storeOp="store" />
-              <gpu-depth-stencil-attachment
-                depthLoadValue={1.0}
-                depthStoreOp="store"
-                stencilLoadValue={1.0}
-                stencilStoreOp="store"
-              >
-                <gpu-texture
-                  mipLevelCount={1}
-                  sampleCount={1}
-                  dimension="2d"
-                  format="depth24plus-stencil8"
-                  usage={GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC}
-                />
-              </gpu-depth-stencil-attachment>
-              <gpu-render-bundle>
-                <gpu-pipeline
-                  primitiveTopology="line-list"
-                  frontFace="cw"
-                  cullMode="none"
-                  depthWriteEnabled={true}
-                  depthCompare="less"
-                >
-                  <gpu-color-state
-                    alphaBlendOp="add"
-                    alphaBlendSrc="src-alpha"
-                    alphaBlendDst="one-minus-src-alpha"
-                    colorBlendOp="add"
-                    colorBlendSrc="src-alpha"
-                    colorBlendDst="one-minus-src-alpha"
-                  />
-                  <gpu-shader-module>{code}</gpu-shader-module>
-                  <gpu-bind-uniform visibility={GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT} />
-                  <gpu-vertex-buffer-layout stepMode="vertex">
-                    <gpu-vertex-attribute format="float3" />
-                    <gpu-vertex-attribute format="float4" />
-                  </gpu-vertex-buffer-layout>
-                  <gpu-draw vertexCount={6}>
-                    <gpu-uniform-buffer>{uniformData}</gpu-uniform-buffer>
-                    <gpu-vertex-buffer>{vertexData}</gpu-vertex-buffer>
-                  </gpu-draw>
-                </gpu-pipeline>
-              </gpu-render-bundle>
-            </gpu-render-pass>
-          </gpu-command>
+          <gpu-command></gpu-command>
         </GPUCanvas>
       </AnimationLoop>
     </>
@@ -135,3 +98,53 @@ function DemoApp() {
 }
 
 render(<DemoApp />, document.getElementById('root'))
+
+// <gpu-swap-chain format="preferred" usage={GPUTextureUsage.RENDER_ATTACHMENT} />
+// <gpu-command>
+//             <gpu-render-pass>
+//               <gpu-color-attachment loadValue={[0.25, 0.28, 0.26, 1.0]} storeOp="store" />
+//               <gpu-depth-stencil-attachment
+//                 depthLoadValue={1.0}
+//                 depthStoreOp="store"
+//                 stencilLoadValue={1.0}
+//                 stencilStoreOp="store"
+//               >
+//                 <gpu-texture
+//                   fullScreen={true}
+//                   mipLevelCount={1}
+//                   sampleCount={1}
+//                   dimension="2d"
+//                   format="depth24plus-stencil8"
+//                   usage={GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC}
+//                 />
+//               </gpu-depth-stencil-attachment>
+//               <gpu-render-bundle>
+//                 <gpu-pipeline
+//                   primitiveTopology="line-list"
+//                   frontFace="cw"
+//                   cullMode="none"
+//                   depthWriteEnabled={true}
+//                   depthCompare="less"
+//                 >
+//                   <gpu-color-state
+//                     alphaBlendOp="add"
+//                     alphaBlendSrc="src-alpha"
+//                     alphaBlendDst="one-minus-src-alpha"
+//                     colorBlendOp="add"
+//                     colorBlendSrc="src-alpha"
+//                     colorBlendDst="one-minus-src-alpha"
+//                   />
+//                   <gpu-shader-module>{code}</gpu-shader-module>
+//                   <gpu-bind-uniform visibility={GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT} />
+//                   <gpu-vertex-buffer-layout stepMode="vertex">
+//                     <gpu-vertex-attribute format="float3" />
+//                     <gpu-vertex-attribute format="float4" />
+//                   </gpu-vertex-buffer-layout>
+//                   <gpu-draw vertexCount={6}>
+//                     <gpu-uniform-buffer>{uniformData}</gpu-uniform-buffer>
+//                     <gpu-vertex-buffer>{vertexData}</gpu-vertex-buffer>
+//                   </gpu-draw>
+//                 </gpu-pipeline>
+//               </gpu-render-bundle>
+//             </gpu-render-pass>
+//           </gpu-command>

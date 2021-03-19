@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useLayoutEffect, useRef } from 'react'
+import React, { useEffect, useMemo, useState, useLayoutEffect, useRef } from 'react'
 import { render } from './reconciler'
 import { useObservedClientSize, assignRef } from './misc'
 import * as webgpu from '../webgpu'
@@ -20,16 +20,24 @@ export const GPUCanvas = React.memo(
 
     const { pixelRatio = window.devicePixelRatio } = props
 
+    const gpuRootProps = useMemo(
+      () => ({
+        verbose: props.verbose ?? false,
+        powerPreference: props.powerPreference
+      }),
+      [props.verbose, props.powerPreference]
+    )
+
     useLayoutEffect(() => {
-      if (canvasRef.current) setGPURoot(webgpu.root(canvasRef.current))
+      const canvas = canvasRef.current
+      if (canvas && gpuRoot?.canvas !== canvas) {
+        setGPURoot(webgpu.root(canvas).setProps(gpuRootProps))
+      }
     }, [canvasRef.current])
 
     useLayoutEffect(() => {
-      gpuRoot?.setProps({
-        verbose: props.verbose || false,
-        powerPreference: props.powerPreference
-      })
-    }, [gpuRoot, props.verbose, props.powerPreference])
+      gpuRoot?.setProps(gpuRootProps)
+    }, [gpuRoot, gpuRootProps])
 
     useLayoutEffect(() => {
       assignRef(forwardedRef, canvasRef)
@@ -43,7 +51,6 @@ export const GPUCanvas = React.memo(
         canvasRef.current!.width = observedSize[0] * pixelRatio
         canvasRef.current!.height = observedSize[1] * pixelRatio
         gpuRoot.canvasResized()
-        gpuRoot.encodeAndSubmit()
       }
     }, [gpuRoot, observedSize, pixelRatio])
 

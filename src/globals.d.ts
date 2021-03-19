@@ -24,7 +24,8 @@ declare module reactgpu {
     'attachment'
   >
 
-  type TextureProps = Omit<GPUTextureDescriptor, 'size'> & Partial<GPUExtent3DDict>
+  type TextureProps = Omit<GPUTextureDescriptor, 'size'> &
+    Partial<GPUExtent3DDict> & { fullScreen?: boolean }
 
   type SwapChainProps = Omit<GPUSwapChainDescriptor, 'device' | 'format'> & {
     format: GPUTextureFormat | 'preferred'
@@ -46,10 +47,10 @@ declare module reactgpu {
     children?: JSX.Element | JSX.Element[]
   }
 
-  type ExtensionProps = { name: GPUExtensionName }
+  type FeatureProps = { name: GPUExtensionName }
 
   interface IntrinsicElements {
-    'gpu-extension': ExtensionProps
+    'gpu-feature': FeatureProps
     'gpu-limits': GPULimits
     'gpu-command': GPUCommandEncoderDescriptor & IntrinsicElementChildren
     'gpu-render-pass': RenderPassProps & IntrinsicElementChildren
@@ -72,4 +73,8 @@ declare module reactgpu {
 
 declare module JSX {
   interface IntrinsicElements extends reactgpu.IntrinsicElements {}
+}
+
+interface Window {
+  __debugGpuRenderReact: unknown
 }

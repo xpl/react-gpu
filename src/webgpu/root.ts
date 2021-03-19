@@ -1,10 +1,19 @@
 import { loggers } from './loggers'
+import { event } from './event'
 import { Type, Command, RenderBundle, Root, RootProps } from './types'
 
 export class InitError extends Error {}
 
 export function root(canvas: HTMLCanvasElement): Root {
   let log = loggers.default
+  let invalid = true
+
+  function invalidate() {
+    if (!invalid) {
+      invalid = true
+      log.debug('invalidated')
+    }
+  }
 
   const commands: Command[] = []
 
@@ -12,20 +21,20 @@ export function root(canvas: HTMLCanvasElement): Root {
     type: Type.Root,
     props: { verbose: false },
     parent: undefined,
-    invalid: false,
     limits: undefined,
-    swapChain: undefined,
-    swapChainInvalid: false,
-    extensions: [],
+    canvas,
+    swapChain: { type: Type.SwapChain, props: { format: 'preferred' }, children: [] },
+    features: [],
     children: commands,
     currentRenderBundle: undefined,
-    canvasResized,
+    invalidate,
+    canvasResized: event<() => void>(),
     encodeAndSubmit,
     setProps(props: RootProps) {
-      log = loggers[root.props?.verbose ? 'verbose' : 'default']
+      log = loggers[props.verbose ? 'verbose' : 'default']
       if (root.props.powerPreference !== props.powerPreference) {
-        root.invalid = true
         root.props.powerPreference = props.powerPreference
+        invalidate()
       }
       return root
     }
@@ -34,13 +43,15 @@ export function root(canvas: HTMLCanvasElement): Root {
   let context: GPUCanvasContext
   let adapter: GPUAdapter | null | undefined
   let device: GPUDevice
-  let swapChain: GPUSwapChain
   let swapChainPreferredFormat: GPUTextureFormat
   let validating: Promise<void> | undefined
 
   function validateDevice() {
-    validating = Promise.resolve()
+    validating ||= Promise.resolve()
       .then(async () => {
+        const features = root.features.map(f => f.props.name)
+        log.debug('initializing adapter & device', features)
+
         context = (canvas.getContext('gpupresent') as unknown) as GPUCanvasContext
         if (!context || !navigator.gpu) throw new InitError('Your browser does not support WebGPU')
 
@@ -49,10 +60,10 @@ export function root(canvas: HTMLCanvasElement): Root {
         })
         if (!adapter) throw new InitError('Failed to init WebGPU adapter!')
 
-        device = (await adapter.requestDevice({
-          limits: root.limits?.props,
-          extensions: root.extensions
-        }))!
+        device = (await adapter.requestDevice(({
+          nonGuaranteedLimits: root.limits?.props,
+          nonGuaranteedFeatures: features
+        } as unknown) as GPUDeviceDescriptor))!
         if (!device) throw new InitError('Failed to init WebGPU device!')
 
         device.addEventListener('uncapturederror', error => log.error(error))
@@ -60,41 +71,39 @@ export function root(canvas: HTMLCanvasElement): Root {
         swapChainPreferredFormat = await context.getSwapChainPreferredFormat(
           (adapter as unknown) as GPUDevice
         )
-        root.invalid = false
+        invalid = false
+        validating = undefined
         log.debug('WebGPU initialized')
 
         encodeAndSubmit()
       })
       .catch(e => {
         log.error(e)
-      })
-      .finally(() => {
-        validating = undefined
+        throw e
       })
   }
 
   function validateSwapChain() {
-    if (!root.swapChainInvalid) {
-      const format = root.swapChain?.props.format || 'preferred'
-      swapChain = context.configureSwapChain({
+    const { swapChain } = root
+    if (!swapChain.handle) {
+      let { format } = root.swapChain.props
+      format = format === 'preferred' ? swapChainPreferredFormat : format
+      log.debug('configuring swap chain', format, swapChain.props)
+      swapChain.handle = context.configureSwapChain({
         device,
-        usage: GPUTextureUsage.RENDER_ATTACHMENT, // TODO: remove?
-        ...root.swapChain?.props,
-        format: format === 'preferred' ? swapChainPreferredFormat : format
+        ...swapChain.props,
+        format
       })
-      root.swapChainInvalid = false
     }
-    return swapChain
+    return swapChain.handle
   }
 
   let depthStencilTexture: GPUTexture
   let depthStencilAttachment: GPUTextureView
   const depthStencilFormat: GPUTextureFormat = 'depth24plus-stencil8'
 
-  function canvasResized() {}
-
   function encodeAndSubmit() {
-    if (root.invalid && !validating) {
+    if (invalid) {
       validateDevice()
     } else {
       const commandBuffers: GPUCommandBuffer[] = []

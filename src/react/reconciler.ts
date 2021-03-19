@@ -9,7 +9,7 @@ type HTMLCanvasElementWithGPU = HTMLCanvasElement & {
 const intrinsicElementNameToType = {
   GPUCanvas: webgpu.Type.Root,
   'gpu-limits': webgpu.Type.Limits,
-  'gpu-extension': webgpu.Type.Extension,
+  'gpu-feature': webgpu.Type.Feature,
   'gpu-command': webgpu.Type.Command,
   'gpu-render-pass': webgpu.Type.RenderPass,
   'gpu-color-attachment': webgpu.Type.ColorAttachment,
@@ -35,12 +35,12 @@ function typeName(x: webgpu.Type) {
 const allowedParents = {
   [webgpu.Type.Root]: null,
   [webgpu.Type.Limits]: webgpu.Type.Root,
-  [webgpu.Type.Extension]: webgpu.Type.Root,
+  [webgpu.Type.Feature]: webgpu.Type.Root,
+  [webgpu.Type.SwapChain]: webgpu.Type.Root,
   [webgpu.Type.Command]: webgpu.Type.Root,
   [webgpu.Type.RenderPass]: webgpu.Type.Command,
   [webgpu.Type.ColorAttachment]: webgpu.Type.RenderPass,
   [webgpu.Type.DepthStencilAttachment]: webgpu.Type.RenderPass,
-  [webgpu.Type.SwapChain]: webgpu.Type.ColorAttachment,
   [webgpu.Type.Texture]: webgpu.Type.Texture,
   [webgpu.Type.RenderBundle]: webgpu.Type.RenderPass,
   [webgpu.Type.Pipeline]: webgpu.Type.RenderBundle,
@@ -62,7 +62,7 @@ function checkAllowedParent(child: webgpu.Descriptor, parent: webgpu.Descriptor)
   }
 }
 
-const nil = {}
+const propsUpdated = {}
 
 const reconciler = ReactReconciler<
   string, // type
@@ -91,26 +91,32 @@ const reconciler = ReactReconciler<
   noTimeout: 0,
 
   getRootHostContext(rootContainerInstance) {
-    console.log('getRootHostContext', ...arguments)
+    // console.log('getRootHostContext', ...arguments)
     return rootContainerInstance._gpuRoot
   },
 
   getChildHostContext(parentHostContext, type, rootContainerInstance) {
-    console.log('getChildHostContext', ...arguments)
+    // console.log('getChildHostContext', ...arguments)
     return parentHostContext
   },
 
+  // Determines what object gets exposed as a ref.
   getPublicInstance(instance) {
-    console.log('getPublicInstance', ...arguments)
+    return instance
   },
 
+  // This method lets you store some information before React starts making changes to the tree on the screen.
+  // For example, the DOM renderer stores the current text selection so that it can later restore it.
   prepareForCommit(containerInfo) {
-    console.log('prepareForCommit', ...arguments)
+    // console.log('prepareForCommit', ...arguments)
     return null
   },
 
+  // This method is called right after React has performed the tree mutations.
+  // You can use it to restore something you've stored in prepareForCommit — for example, text selection.
   resetAfterCommit(containerInfo) {
     console.log('resetAfterCommit', ...arguments)
+    containerInfo._gpuRoot.encodeAndSubmit()
   },
 
   clearContainer(container) {
@@ -131,6 +137,7 @@ const reconciler = ReactReconciler<
     }
     return {
       type,
+      root: hostContext,
       props: { ...webgpu.defaultProps[type], ...props },
       parent: undefined,
       children: [],
@@ -159,15 +166,44 @@ const reconciler = ReactReconciler<
     console.log('commitMount', ...arguments)
   },
 
-  prepareUpdate(descriptor, type, oldProps, newProps, rootContainerInstance, hostContext) {
+  prepareUpdate(
+    descriptor,
+    type,
+    oldProps: Record<string, any>,
+    newProps: Record<string, any>,
+    rootContainerInstance,
+    hostContext
+  ) {
+    const oldValues = Object.values(oldProps)
+    const newValues = Object.values(newProps)
+
+    const oldSize = oldValues.length
+    const newSize = newValues.length
+
+    if (oldSize === newSize) {
+      for (let i = 0; i < oldSize; i++) {
+        if (oldValues[i] !== newValues[i]) {
+          return propsUpdated
+        }
+      }
+      return null // nothing's changed
+    }
+
     // checks if props changed and whether a `commitUpdate` is needed
     // console.log('prepareUpdate', ...arguments)
-    return nil
+    return propsUpdated
   },
 
-  commitUpdate(descriptor, updatePayload, type, oldProps, newProps, internalInstanceHandle) {
+  commitUpdate(child, updatePayload, type, oldProps, newProps, internalInstanceHandle) {
     console.log('commitUpdate', type, oldProps, newProps)
-    Object.assign(descriptor.props, newProps)
+    Object.assign(child.props, newProps)
+    if (child.type === webgpu.Type.SwapChain) {
+      ;(child as webgpu.SwapChain).handle = undefined
+    } else if (child.type === webgpu.Type.Limits) {
+      ;(child as webgpu.Limits).root.invalidate()
+    } else if (child.type === webgpu.Type.Feature) {
+      ;(child as webgpu.Feature).root.invalidate()
+    }
   },
 
   resetTextContent(descriptor) {
@@ -197,29 +233,28 @@ function orderIndependentInsertion(parent: webgpu.Descriptor, child: webgpu.Desc
     return true
   } else if (child.type === webgpu.Type.Limits) {
     ;(parent as webgpu.Root).limits = child as webgpu.Limits
-    ;(parent as webgpu.Root).invalid = true
-    return true
-  } else if (child.type === webgpu.Type.Extension) {
-    ;(parent as webgpu.Root).extensions.push((child as webgpu.Extension).props.name)
-    ;(parent as webgpu.Root).invalid = true
+    ;(parent as webgpu.Root).invalidate()
     return true
   } else if (child.type === webgpu.Type.SwapChain) {
     ;(parent as webgpu.Root).swapChain = child as webgpu.SwapChain
-    ;(parent as webgpu.Root).swapChainInvalid = true
     return true
   }
   return false
 }
 
 function appendChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
-  console.log('appendChild', typeName(child.type), '→', typeName(parent.type))
+  console.log('appendChild', typeName(child.type), '→', typeName(parent.type), child.props)
   checkAllowedParent(child, parent)
+  if (child.parent) {
+    throw new Error('child already has parent!')
+  }
   child.parent = parent
-  if (child.parent) removeChild(parent, child) // TODO: does it really happen?
   if (child.type === webgpu.Type.ColorAttachment) {
     ;(parent as webgpu.RenderPass).props.colorAttachments.push(
       (child as webgpu.ColorAttachment).props
     )
+  } else if (child.type === webgpu.Type.Feature) {
+    ;(parent as webgpu.Root).features.push(child as webgpu.Feature)
   } else if (!orderIndependentInsertion(parent, child)) {
     parent.children.push(child)
   }
@@ -242,7 +277,7 @@ function insertBefore(
   child: webgpu.Descriptor,
   beforeChild: webgpu.Descriptor
 ) {
-  console.log('insertBefore', typeName(child.type), '→', typeName(beforeChild.type))
+  console.log('insertBefore', typeName(child.type), '→', typeName(beforeChild.type), child.props)
   checkAllowedParent(child, parent)
   const reordered = child.parent === parent
   if (!reordered && child.parent) removeChild(parent, child) // TODO: does it really happen?
@@ -255,6 +290,8 @@ function insertBefore(
       child.props,
       reordered
     )
+  } else if (child.type === webgpu.Type.Feature) {
+    putBefore((parent as webgpu.Root).features, beforeChild, child, reordered)
   } else {
     putBefore(parent.children, beforeChild, child, reordered)
   }
@@ -267,32 +304,27 @@ function insertBefore(
 }
 
 function removeChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
-  console.log('removeChild', typeName(child.type), '→', typeName(parent.type))
+  console.log('removeChild', typeName(child.type), '←', typeName(parent.type), child.props)
   child.parent = undefined
   if (child.type === webgpu.Type.ColorAttachment) {
     removeFrom((parent as webgpu.RenderPass).props.colorAttachments, child.props)
-    return
   } else if (child.type === webgpu.Type.DepthStencilAttachment) {
     ;(parent as webgpu.RenderPass).props.depthStencilAttachment = undefined
-    return
   } else if (child.type === webgpu.Type.Limits) {
     ;(parent as webgpu.Root).limits = undefined
-    ;(parent as webgpu.Root).invalid = true
-    return
-  } else if (child.type === webgpu.Type.Extension) {
-    removeFrom((parent as webgpu.Root).extensions, (child as webgpu.Extension).props.name)
-    ;(parent as webgpu.Root).invalid = true
-    return
+    ;(parent as webgpu.Root).invalidate()
+  } else if (child.type === webgpu.Type.Feature) {
+    removeFrom((parent as webgpu.Root).features, child)
+    ;(parent as webgpu.Root).invalidate()
   } else if (child.type === webgpu.Type.SwapChain) {
-    ;(parent as webgpu.Root).swapChain = undefined
-    ;(parent as webgpu.Root).swapChainInvalid = true
-    return true
+    ;(child as webgpu.SwapChain).handle = undefined
   } else {
     removeFrom(parent.children, child)
-  }
-  if (child.currentRenderBundle !== undefined) {
-    child.currentRenderBundle.handle = undefined // invalidate
-    child.currentRenderBundle = undefined
+
+    if (child.currentRenderBundle !== undefined) {
+      child.currentRenderBundle.handle = undefined // invalidate
+      child.currentRenderBundle = undefined
+    }
   }
 }
 
