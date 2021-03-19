@@ -25,7 +25,13 @@ export function root(canvas: HTMLCanvasElement): Root {
     parent: undefined,
     limits: undefined,
     canvas,
-    swapChain: { type: Type.SwapChain, props: { format: 'preferred' }, children: [] },
+    swapChain: {
+      type: Type.SwapChain,
+      props: { format: 'preferred' },
+      format: 'bgra8unorm',
+      formatVersion: 0,
+      children: []
+    },
     features: [],
     children: commands,
     currentRenderBundle: undefined,
@@ -47,6 +53,125 @@ export function root(canvas: HTMLCanvasElement): Root {
   let device: GPUDevice
   let swapChainPreferredFormat: GPUTextureFormat
   let validating: Promise<void> | undefined
+
+  function encodeAndSubmit() {
+    if (invalid) {
+      validateDevice()
+    } else {
+      const commandBuffers: GPUCommandBuffer[] = []
+      for (const command of commands) {
+        const commandEncoder = device.createCommandEncoder(command.props)
+        for (const renderPass of command.children) {
+          withAttachments(renderPass, props => {
+            const passEncoder = commandEncoder.beginRenderPass(props)
+            passEncoder.executeBundles(
+              renderPass.children.map(rb => validateRenderBundle(rb, renderPass))
+            )
+            passEncoder.endPass()
+          })
+        }
+        commandBuffers.push(commandEncoder.finish())
+      }
+      device.queue.submit(commandBuffers)
+    }
+  }
+
+  function withAttachments(
+    pass: RenderPass,
+    encodePass: (renderPass: GPURenderPassDescriptor) => void
+  ) {
+    const swapChain = validateSwapChain()
+    const colorAttachments: GPURenderPassColorAttachmentDescriptor[] = []
+    pass.colorFormats = []
+    pass.formatVersion = 0
+    for (const att of pass.colorAttachments) {
+      const texture = att.children[0] ? validateTexture(att.children[0]) : swapChain
+      pass.colorFormats.push(texture.format)
+      pass.formatVersion += texture.formatVersion
+      colorAttachments.push({ ...att.props, attachment: texture.view })
+    }
+    let depthStencilAttachment: GPURenderPassDepthStencilAttachmentDescriptor | undefined
+    if (pass.depthStencilAttachment?.children[0]) {
+      const texture = validateTexture(pass.depthStencilAttachment.children[0])
+      pass.depthStencilFormat = texture.format
+      pass.formatVersion += texture.formatVersion
+      depthStencilAttachment = {
+        ...pass.depthStencilAttachment.props,
+        attachment: texture.view
+      }
+    }
+    encodePass({
+      ...pass.props,
+      colorAttachments,
+      depthStencilAttachment
+    })
+  }
+
+  function validateRenderBundle(bundle: RenderBundle, pass: RenderPass) {
+    if (bundle.handle === undefined || bundle.formatVersion !== pass.formatVersion) {
+      bundle.formatVersion = pass.formatVersion
+      const props = bundle.props as GPURenderBundleEncoderDescriptor
+      props.colorFormats = pass.colorFormats
+      props.depthStencilFormat = pass.depthStencilFormat
+      const encoder = device.createRenderBundleEncoder(props)
+      bundle.handle = encoder.finish()
+    }
+    return bundle.handle
+  }
+
+  type ValidTexture = { format: GPUTextureFormat; view: GPUTextureView; formatVersion: number }
+
+  function validateSwapChain(): ValidTexture {
+    const { swapChain } = root
+    let { handle } = swapChain
+    if (!handle) {
+      let { format } = root.swapChain.props
+      const resolvedFormat = format === 'preferred' ? swapChainPreferredFormat : format
+      if (swapChain.format !== resolvedFormat) {
+        swapChain.format = resolvedFormat
+        swapChain.formatVersion++
+      }
+      log.debug('configuring swap chain', format, swapChain.props)
+      handle = swapChain.handle = context.configureSwapChain({
+        device,
+        ...swapChain.props,
+        format: resolvedFormat
+      })
+    }
+    swapChain.view = handle.getCurrentTexture().createView()
+    return swapChain as ValidTexture
+  }
+
+  function validateTexture(t: Texture): ValidTexture {
+    let { view } = t
+    if (view === undefined) {
+      const { props } = t
+      let size: number[]
+      if (props.fullScreen) {
+        size = [canvas.width, canvas.height, 1]
+      } else if (props.width !== undefined) {
+        size = [props.width, props.height!, props.depthOrArrayLayers!]
+      } else {
+        throw new InvalidProps('should specify either dimensions or fullScreen for textures')
+      }
+      log.debug('createTexture', size, t.props)
+      if (t.format !== t.props.format) {
+        t.format = t.props.format
+        t.formatVersion++
+      }
+      view = t.view = (t.handle = device.createTexture({ ...t.props, size })).createView()
+      t.invalidate = () => {
+        if (t.invalidate) canvasResized.off(t.invalidate)
+        t.handle!.destroy()
+        t.handle = undefined
+        t.view = undefined
+      }
+      if (props.fullScreen) {
+        canvasResized.on(t.invalidate)
+      }
+    }
+    return t as ValidTexture
+  }
 
   function validateDevice() {
     validating ||= Promise.resolve()
@@ -83,100 +208,6 @@ export function root(canvas: HTMLCanvasElement): Root {
         log.error(e)
         throw e
       })
-  }
-
-  function validateSwapChain() {
-    const { swapChain } = root
-    if (!swapChain.handle) {
-      let { format } = root.swapChain.props
-      format = format === 'preferred' ? swapChainPreferredFormat : format
-      log.debug('configuring swap chain', format, swapChain.props)
-      swapChain.handle = context.configureSwapChain({
-        device,
-        ...swapChain.props,
-        format
-      })
-    }
-    return swapChain.handle
-  }
-
-  function validateTexture(t: Texture): GPUTextureView {
-    let { view } = t
-    if (view === undefined) {
-      const { props } = t
-      let size: number[]
-      let onResize: () => void
-      if (props.fullScreen) {
-        size = [canvas.width, canvas.height, 1]
-      } else if (props.width !== undefined) {
-        size = [props.width, props.height!, props.depthOrArrayLayers!]
-      } else {
-        throw new InvalidProps('should specify either dimensions or fullScreen for textures')
-      }
-      log.debug('createTexture', size, t.props)
-      view = t.view = (t.handle = device.createTexture({ ...t.props, size })).createView()
-      t.invalidate = () => {
-        if (t.invalidate) canvasResized.off(t.invalidate)
-        t.handle!.destroy()
-        t.handle = undefined
-        t.view = undefined
-      }
-      if (props.fullScreen) {
-        canvasResized.on(t.invalidate)
-      }
-    }
-    return view
-  }
-
-  function encodeAndSubmit() {
-    if (invalid) {
-      validateDevice()
-    } else {
-      const commandBuffers: GPUCommandBuffer[] = []
-
-      for (const command of commands) {
-        const commandEncoder = device.createCommandEncoder(command.props)
-        for (const renderPass of command.children) {
-          withAttachments(renderPass, props => {
-            const passEncoder = commandEncoder.beginRenderPass(props)
-            passEncoder.executeBundles(renderPass.children.map(encodeRenderBundleIfNeeded))
-            passEncoder.endPass()
-          })
-        }
-        commandBuffers.push(commandEncoder.finish())
-      }
-
-      device.queue.submit(commandBuffers)
-    }
-  }
-
-  function encodeRenderBundleIfNeeded(rb: RenderBundle) {
-    if (rb.handle === undefined) {
-      const encoder = device.createRenderBundleEncoder(rb.props)
-      rb.handle = encoder.finish()
-    }
-    return rb.handle
-  }
-
-  function withAttachments(
-    renderPass: RenderPass,
-    encodePass: (renderPass: GPURenderPassDescriptor) => void
-  ) {
-    const swapChainAttachment = validateSwapChain().getCurrentTexture().createView()
-    encodePass({
-      ...renderPass.props,
-      colorAttachments: renderPass.colorAttachments.map(att => ({
-        ...att.props,
-        attachment: att.children[0] ? validateTexture(att.children[0]) : swapChainAttachment
-      })),
-      depthStencilAttachment:
-        renderPass.depthStencilAttachment && renderPass.depthStencilAttachment.children[0]
-          ? {
-              ...renderPass.depthStencilAttachment.props,
-              attachment: validateTexture(renderPass.depthStencilAttachment.children[0])
-            }
-          : undefined
-    })
   }
 
   return root

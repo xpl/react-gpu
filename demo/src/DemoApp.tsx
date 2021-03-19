@@ -110,6 +110,7 @@ function DemoApp() {
                   usage={GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC}
                 />
               </gpu-depth-stencil-attachment>
+              <gpu-render-bundle></gpu-render-bundle>
             </gpu-render-pass>
           </gpu-command>
         </GPUCanvas>

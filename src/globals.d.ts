@@ -17,9 +17,9 @@ declare module reactgpu {
 
   type OriginalType<T> = T extends { __originalType?: infer U } ? (unknown extends U ? T : U) : T
 
-  type ColorAttachmentProps = Optional<GPURenderPassColorAttachmentDescriptor, 'attachment'>
+  type ColorAttachmentProps = Omit<GPURenderPassColorAttachmentDescriptor, 'attachment'>
 
-  type DepthStencilAttachmentProps = Optional<
+  type DepthStencilAttachmentProps = Omit<
     GPURenderPassDepthStencilAttachmentDescriptor,
     'attachment'
   >
@@ -41,7 +41,10 @@ declare module reactgpu {
     'vertexStage' | 'colorStates' | 'format'
   >
 
-  type RenderBundleProps = Optional<GPURenderBundleEncoderDescriptor, 'colorFormats'>
+  type RenderBundleProps = Omit<
+    GPURenderBundleEncoderDescriptor,
+    'colorFormats' | 'depthStencilFormat' | 'sampleCount' // auto-taken from attachments
+  >
 
   type IntrinsicElementChildren = {
     children?: JSX.Element | JSX.Element[]
