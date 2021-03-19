@@ -3,20 +3,6 @@ declare module reactgpu {
     [P in keyof T]: T[P] extends string ? T[P] : T[P] extends Iterable<infer Elem> ? Elem[] : T[P]
   }
 
-  type Optional<T, K> = Omit<T, K> &
-    Partial<Pick<T, K>> & {
-      __originalType?: T
-      __madeOptional?: Pick<T, K> & { __originalType?: T }
-    }
-
-  type PropsMadeOptional<T> = T extends { __madeOptional?: infer U }
-    ? unknown extends U
-      ? Partial<T> & { __originalType?: T }
-      : U
-    : Partial<T> & { __originalType?: T }
-
-  type OriginalType<T> = T extends { __originalType?: infer U } ? (unknown extends U ? T : U) : T
-
   type ColorAttachmentProps = Omit<GPURenderPassColorAttachmentDescriptor, 'attachment'>
 
   type DepthStencilAttachmentProps = Omit<
@@ -36,15 +22,28 @@ declare module reactgpu {
     'colorAttachments' | 'depthStencilAttachment'
   >
 
-  type RenderPipelineProps = Optional<
-    GPURenderPipelineDescriptor & GPURasterizationStateDescriptor & GPUDepthStencilStateDescriptor,
-    'vertexStage' | 'colorStates' | 'format'
-  >
+  type OmitPubliclyButRequireInternally<T, K> = Omit<T, K> & { __omitted?: Pick<T, K> }
 
-  type RenderBundleProps = Omit<
+  type DepthStencilStateProps = OmitPubliclyButRequireInternally<GPUDepthStencilState, 'format'>
+
+  type ColorTargetStateProps = {
+    writeMask?: GPUColorWriteFlags
+    alphaBlendOp?: GPUBlendOperation
+    alphaBlendSrc?: GPUBlendFactor
+    alphaBlendDst?: GPUBlendFactor
+    colorBlendOp?: GPUBlendOperation
+    colorBlendSrc?: GPUBlendFactor
+    colorBlendDst?: GPUBlendFactor
+  }
+
+  type RenderBundleProps = OmitPubliclyButRequireInternally<
     GPURenderBundleEncoderDescriptor,
     'colorFormats' | 'depthStencilFormat' | 'sampleCount' // auto-taken from attachments
   >
+
+  type ShaderModuleProps = OmitPubliclyButRequireInternally<GPUShaderModuleDescriptor, 'code'> & {
+    onCompilationInfo?: (info: GPUCompilationInfo) => void
+  }
 
   type IntrinsicElementChildren = {
     children?: JSX.Element | JSX.Element[]
@@ -62,10 +61,12 @@ declare module reactgpu {
     'gpu-texture': TextureProps
     'gpu-swap-chain': SwapChainProps
     'gpu-render-bundle': RenderBundleProps & IntrinsicElementChildren
-    'gpu-pipeline': RenderPipelineProps & IntrinsicElementChildren
+    'gpu-pipeline': GPUPrimitiveState & IntrinsicElementChildren
+    'gpu-multisample': GPUMultisampleState
+    'gpu-depth-stencil': DepthStencilStateProps
+    'gpu-color-target': ColorTargetStateProps & IntrinsicElementChildren
     'gpu-bind-uniform': IntrinsicElementChildren
-    'gpu-color-state': IntrinsicElementChildren
-    'gpu-shader-module': IntrinsicElementChildren
+    'gpu-shader-module': ShaderModuleProps & { children: string }
     'gpu-vertex-buffer-layout': IntrinsicElementChildren
     'gpu-vertex-attribute': IntrinsicElementChildren
     'gpu-draw': IntrinsicElementChildren

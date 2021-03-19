@@ -1,6 +1,15 @@
 import { loggers } from './loggers'
 import { event } from './event'
-import { Type, Command, RenderPass, RenderBundle, Root, RootProps, Texture } from './types'
+import {
+  Type,
+  Command,
+  RenderPass,
+  RenderBundle,
+  Root,
+  RootProps,
+  Texture,
+  ShaderModule
+} from './types'
 
 export class InitError extends Error {}
 export class InvalidProps extends Error {}
@@ -34,7 +43,6 @@ export function root(canvas: HTMLCanvasElement): Root {
     },
     features: [],
     children: commands,
-    currentRenderBundle: undefined,
     invalidate,
     canvasResized,
     encodeAndSubmit,
@@ -110,10 +118,18 @@ export function root(canvas: HTMLCanvasElement): Root {
   function validateRenderBundle(bundle: RenderBundle, pass: RenderPass) {
     if (bundle.handle === undefined || bundle.formatVersion !== pass.formatVersion) {
       bundle.formatVersion = pass.formatVersion
-      const props = bundle.props as GPURenderBundleEncoderDescriptor
+      const { props } = bundle
       props.colorFormats = pass.colorFormats
       props.depthStencilFormat = pass.depthStencilFormat
       const encoder = device.createRenderBundleEncoder(props)
+      for (const pipeline of bundle.children) {
+        const { gpuProps, shaderModule } = pipeline
+        if (!shaderModule) continue
+        gpuProps.vertex.module = validateShaderModule(shaderModule).handle
+        // if (pipeline.depthStencilState) {
+        //   pipelineDesc.
+        // }
+      }
       bundle.handle = encoder.finish()
     }
     return bundle.handle
@@ -171,6 +187,18 @@ export function root(canvas: HTMLCanvasElement): Root {
       }
     }
     return t as ValidTexture
+  }
+
+  // TODO: LRU cache
+  function validateShaderModule(m: ShaderModule): { handle: GPUShaderModule } {
+    if (!m.handle) {
+      log.debug('createShaderModule', m.props)
+      m.handle = device.createShaderModule(m.props)
+      if (m.props.onCompilationInfo) {
+        m.handle.compilationInfo().then(m.props.onCompilationInfo)
+      }
+    }
+    return m as { handle: GPUShaderModule }
   }
 
   function validateDevice() {

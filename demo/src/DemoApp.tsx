@@ -110,7 +110,18 @@ function DemoApp() {
                   usage={GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC}
                 />
               </gpu-depth-stencil-attachment>
-              <gpu-render-bundle></gpu-render-bundle>
+              <gpu-render-bundle>
+                <gpu-pipeline topology="line-list" frontFace="cw" cullMode="none">
+                  <gpu-multisample count={0} />
+                  <gpu-depth-stencil depthCompare="less" depthWriteEnabled={true} />
+                  <gpu-color-target
+                    alphaBlendOp="add"
+                    alphaBlendSrc="src-alpha"
+                    alphaBlendDst="one-minus-src-alpha"
+                  />
+                  <gpu-shader-module>{code}</gpu-shader-module>
+                </gpu-pipeline>
+              </gpu-render-bundle>
             </gpu-render-pass>
           </gpu-command>
         </GPUCanvas>
