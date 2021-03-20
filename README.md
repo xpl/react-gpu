@@ -17,8 +17,6 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
 <AnimationLoop isRunning={isRunning}>
   <DemoComponent />
   <GPUCanvas className="canvas-3d" powerPreference="high-performance" verbose>
-    <gpu-feature name="pipeline-statistics-query" />
-    <gpu-feature name="texture-compression-bc" />
     <gpu-swap-chain format="preferred" usage={GPUTextureUsage.RENDER_ATTACHMENT} />
     <gpu-command>
       <gpu-render-pass>
