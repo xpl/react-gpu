@@ -7,15 +7,15 @@ declare module reactgpu {
 
   type ColorAttachmentProps = Drop<GPURenderPassColorAttachmentDescriptor, 'attachment'>
 
-  type DepthStencilAttachmentProps = Omit<
+  type DepthStencilAttachmentProps = Drop<
     GPURenderPassDepthStencilAttachmentDescriptor,
     'attachment'
   >
 
-  type TextureProps = Omit<GPUTextureDescriptor, 'size'> &
+  type TextureProps = Drop<GPUTextureDescriptor, 'size'> &
     Partial<GPUExtent3DDict> & { fullScreen?: boolean }
 
-  type SwapChainProps = Omit<GPUSwapChainDescriptor, 'device' | 'format'> & {
+  type SwapChainProps = Drop<Omit<GPUSwapChainDescriptor, 'format'>, 'device'> & {
     format: GPUTextureFormat | 'preferred'
   }
 
@@ -49,9 +49,8 @@ declare module reactgpu {
     onCompilationInfo?: (info: GPUCompilationInfo) => void
   }
 
-  type IntrinsicElementChildren = {
-    children?: JSX.Element | JSX.Element[]
-  }
+  type JSXElement = JSX.Element | null
+  type JSXChildren = { children?: JSXElement | JSXElement[] }
 
   type FeatureProps = { name: GPUExtensionName }
 
@@ -62,24 +61,24 @@ declare module reactgpu {
   interface IntrinsicElements {
     'gpu-feature': FeatureProps
     'gpu-limits': GPULimits
-    'gpu-command': GPUCommandEncoderDescriptor & IntrinsicElementChildren
-    'gpu-render-pass': RenderPassProps & IntrinsicElementChildren
-    'gpu-color-attachment': ColorAttachmentProps & IntrinsicElementChildren
-    'gpu-depth-stencil-attachment': DepthStencilAttachmentProps & IntrinsicElementChildren
+    'gpu-command': GPUCommandEncoderDescriptor & JSXChildren
+    'gpu-render-pass': RenderPassProps & JSXChildren
+    'gpu-color-attachment': ColorAttachmentProps & JSXChildren
+    'gpu-depth-stencil-attachment': DepthStencilAttachmentProps & JSXChildren
     'gpu-texture': TextureProps
     'gpu-swap-chain': SwapChainProps
-    'gpu-render-bundle': RenderBundleProps & IntrinsicElementChildren
-    'gpu-render-pipeline': RenderPipelineProps & IntrinsicElementChildren
+    'gpu-render-bundle': RenderBundleProps & JSXChildren
+    'gpu-render-pipeline': RenderPipelineProps & JSXChildren
     'gpu-multisample': GPUMultisampleState
     'gpu-depth-stencil': DepthStencilStateProps
-    'gpu-color-target': ColorTargetStateProps & IntrinsicElementChildren
-    'gpu-bind-uniform': IntrinsicElementChildren
+    'gpu-color-target': ColorTargetStateProps & JSXChildren
+    'gpu-bind-uniform': JSXChildren
     'gpu-shader-module': ShaderModuleProps & { children: string }
-    'gpu-vertex-buffer-layout': VertexBufferLayoutProps & IntrinsicElementChildren
-    'gpu-vertex-attribute': IntrinsicElementChildren
-    'gpu-draw': IntrinsicElementChildren
-    'gpu-vertex-buffer': IntrinsicElementChildren
-    'gpu-uniform-buffer': IntrinsicElementChildren
+    'gpu-vertex-buffer-layout': VertexBufferLayoutProps & JSXChildren
+    'gpu-vertex-attribute': JSXChildren
+    'gpu-draw': JSXChildren
+    'gpu-vertex-buffer': JSXChildren
+    'gpu-uniform-buffer': JSXChildren
   }
 }
 

@@ -1,5 +1,6 @@
 import { loggers } from './loggers'
 import { event } from './event'
+import { mulberry32hash, combineHashes } from './util'
 import {
   Type,
   Command,
@@ -9,8 +10,12 @@ import {
   Root,
   RootProps,
   Texture,
-  ShaderModule
+  ShaderModule,
+  DescriptorType,
+  ColorTargetState,
+  DepthStencilAttachment
 } from './types'
+import { GPUTextureFormatId } from './enums'
 
 export class InitError extends Error {}
 export class InvalidProps extends Error {}
@@ -26,24 +31,20 @@ export function root(canvas: HTMLCanvasElement): Root {
     }
   }
 
-  const commands: Command[] = []
   const canvasResized = event<() => void>()
 
   const root: Root = {
     type: Type.Root,
     props: { verbose: false },
     parent: undefined,
-    limits: undefined,
     canvas,
+    commands: undefined,
     swapChain: {
       type: Type.SwapChain,
-      props: { format: 'preferred' },
+      props: { format: 'preferred', device: (undefined as unknown) as GPUDevice },
       format: 'bgra8unorm',
-      formatVersion: 0,
-      children: []
+      formatHash: 0
     },
-    features: [],
-    children: commands,
     invalidate,
     canvasResized,
     encodeAndSubmit,
@@ -69,15 +70,13 @@ export function root(canvas: HTMLCanvasElement): Root {
     } else {
       const swapChain = validateSwapChain()
       const commandBuffers: GPUCommandBuffer[] = []
-      for (const command of commands) {
+      for (const command of validateCommands()) {
         const commandEncoder = device.createCommandEncoder(command.props)
-        for (const renderPass of command.children) {
+        for (let pass = command.first; pass !== undefined; pass = pass.next) {
           const passEncoder = commandEncoder.beginRenderPass(
-            validateRenderPassAttachments(renderPass, swapChain)
+            validateRenderPassAttachments(pass as RenderPass, swapChain)
           )
-          passEncoder.executeBundles(
-            renderPass.children.map(rb => validateRenderBundle(rb, renderPass))
-          )
+          passEncoder.executeBundles(validateRenderBundles(pass as RenderPass))
           passEncoder.endPass()
         }
         commandBuffers.push(commandEncoder.finish())
@@ -86,42 +85,65 @@ export function root(canvas: HTMLCanvasElement): Root {
     }
   }
 
+  function validateCommands() {
+    let { commands } = root
+    if (!commands) {
+      commands = root.commands = []
+      for (let x = root.first; x !== undefined; x = x.next) {
+        if (x.type === Type.Command) {
+          commands.push(x as Command)
+        }
+      }
+    }
+    return commands
+  }
+
+  function* validateRenderBundles(pass: RenderPass) {
+    for (let bundle = pass.first; bundle !== undefined; bundle = bundle.next) {
+      yield validateRenderBundle(bundle as RenderBundle, pass)
+    }
+  }
+
   function validateRenderPassAttachments(pass: RenderPass, swapChain: ValidTexture) {
     const { props } = pass
+    let formatHash = 0
     pass.colorFormats = []
-    pass.formatVersion = 0
     props.colorAttachments = []
-    for (const att of pass.colorAttachments) {
-      const texture = att.children[0] ? validateTexture(att.children[0]) : swapChain
-      pass.colorFormats.push(texture.format)
-      pass.formatVersion += texture.formatVersion
-      att.props.attachment = texture.view
-      props.colorAttachments.push(att.props)
-    }
-    if (pass.depthStencilAttachment?.children[0] !== undefined) {
-      const texture = validateTexture(pass.depthStencilAttachment.children[0])
-      pass.depthStencilFormat = texture.format
-      pass.formatVersion += texture.formatVersion
-      props.depthStencilAttachment = {
-        ...pass.depthStencilAttachment.props,
-        attachment: texture.view
+    props.depthStencilAttachment = undefined
+    for (let x = pass.first; x !== undefined; x = x.next) {
+      const { type } = x
+      if (type === Type.ColorAttachment) {
+        const attachment = x as DescriptorType[typeof type]
+        const texture = attachment.first ? validateTexture(attachment.first as Texture) : swapChain
+        pass.colorFormats.push(texture.format)
+        formatHash = combineHashes(formatHash, texture.formatHash)
+        attachment.props.attachment = texture.view
+        props.colorAttachments.push(attachment.props)
+      } else if (type === Type.DepthStencilAttachment) {
+        const attachment = x as DescriptorType[typeof type]
+        if (!attachment.first) throw new Error('need texture in depth stencil attachment')
+        const texture = validateTexture(attachment.first as Texture)
+        pass.depthStencilFormat = texture.format
+        formatHash = combineHashes(formatHash, texture.formatHash)
+        props.depthStencilAttachment = attachment.props
+        props.depthStencilAttachment.attachment = texture.view
       }
-    } else {
-      props.depthStencilAttachment = undefined
     }
+    pass.formatHash = formatHash
     return props
   }
 
   function validateRenderBundle(bundle: RenderBundle, pass: RenderPass) {
-    if (bundle.handle === undefined || bundle.formatVersion !== pass.formatVersion) {
-      bundle.formatVersion = pass.formatVersion
+    if (bundle.handle === undefined || bundle.formatHash !== pass.formatHash) {
+      bundle.formatHash = pass.formatHash
       const { props } = bundle
       const { colorFormats, depthStencilFormat } = pass
       props.colorFormats = colorFormats
       props.depthStencilFormat = depthStencilFormat
       const encoder = device.createRenderBundleEncoder(props)
-      for (const pipeline of bundle.children) {
-        const handle = validateRenderPipeline(pipeline, depthStencilFormat).handle
+      for (let pipeline = bundle.first; pipeline !== undefined; pipeline = pipeline.next) {
+        const handle = validateRenderPipeline(pipeline as RenderPipeline, depthStencilFormat).handle
+        // TODO...
       }
       bundle.handle = encoder.finish()
     }
@@ -131,7 +153,24 @@ export function root(canvas: HTMLCanvasElement): Root {
   function validateRenderPipeline(pipeline: RenderPipeline, depthStencilFormat: GPUTextureFormat) {
     let { handle } = pipeline
     if (!handle) {
-      const { gpuProps, shaderModules, fragmentStates } = pipeline
+      const shaderModules: ShaderModule[] = []
+      const fragmentStates: GPUColorTargetState[] = []
+      let multisampleState: GPUMultisampleState | undefined
+      let depthStencilState: GPUDepthStencilState | undefined
+      for (let x = pipeline.first; x !== undefined; x = x.next) {
+        const { type } = x
+        if (type === Type.ShaderModule) {
+          shaderModules.push(x as DescriptorType[typeof type])
+        } else if (type === Type.ColorTargetState) {
+          fragmentStates.push((x as DescriptorType[typeof type]).gpuProps)
+        } else if (type === Type.DepthStencilState) {
+          depthStencilState = (x as DescriptorType[typeof type]).props
+          depthStencilState.format = depthStencilFormat
+        } else if (type === Type.MultisampleState) {
+          multisampleState = (x as DescriptorType[typeof type]).props
+        }
+      }
+      const { gpuProps } = pipeline
       const m1 = shaderModules[0]
       const m2 = shaderModules[1]
       const vertModule = m1?.props.vertexEntryPoint !== undefined ? m1 : m2
@@ -145,39 +184,41 @@ export function root(canvas: HTMLCanvasElement): Root {
         ? {
             entryPoint: fragModule.props.fragmentEntryPoint!,
             module: validateShaderModule(fragModule).handle,
-            targets: fragmentStates.map(s => s.gpuProps)
+            targets: fragmentStates
           }
         : undefined
-
-      const depthStencilProps = pipeline.depthStencilState?.props
-      if (depthStencilProps !== undefined) depthStencilProps.format = depthStencilFormat
-      gpuProps.depthStencil = depthStencilProps
       gpuProps.primitive = pipeline.props
-      gpuProps.multisample = pipeline.multisampleState?.props
+      gpuProps.depthStencil = depthStencilState
+      gpuProps.multisample = multisampleState
       // gpuProps.layout // TODO
       pipeline.handle = device.createRenderPipeline(gpuProps)
     }
     return pipeline as { handle: GPURenderPipeline }
   }
 
-  type ValidTexture = { format: GPUTextureFormat; view: GPUTextureView; formatVersion: number }
+  type ValidTexture = {
+    format: GPUTextureFormat
+    view: GPUTextureView
+    formatHash: number
+  }
 
   function validateSwapChain(): ValidTexture {
     const { swapChain } = root
     let { handle } = swapChain
     if (!handle) {
-      let { format } = root.swapChain.props
-      const resolvedFormat = format === 'preferred' ? swapChainPreferredFormat : format
-      if (swapChain.format !== resolvedFormat) {
-        swapChain.format = resolvedFormat
-        swapChain.formatVersion++
+      const { props } = root.swapChain
+      let { format } = props
+      if (format === 'preferred') {
+        format = swapChainPreferredFormat
       }
-      log.debug('configuring swap chain', format, swapChain.props)
-      handle = swapChain.handle = context.configureSwapChain({
-        device,
-        ...swapChain.props,
-        format: resolvedFormat
-      })
+      if (swapChain.format !== format) {
+        swapChain.format = format
+        swapChain.formatHash = mulberry32hash(GPUTextureFormatId[format])
+      }
+      props.device = device
+      props.format = format
+      log.debug('configuring swap chain', format, props)
+      handle = swapChain.handle = context.configureSwapChain(props as GPUSwapChainDescriptor)
     }
     swapChain.view = handle.getCurrentTexture().createView()
     return swapChain as ValidTexture
@@ -189,18 +230,18 @@ export function root(canvas: HTMLCanvasElement): Root {
       const { props } = t
       let size: number[]
       if (props.fullScreen) {
-        size = [canvas.width, canvas.height, 1]
+        props.size = [canvas.width, canvas.height, 1]
       } else if (props.width !== undefined) {
-        size = [props.width, props.height!, props.depthOrArrayLayers!]
+        props.size = [props.width, props.height!, props.depthOrArrayLayers!]
       } else {
         throw new InvalidProps('should specify either dimensions or fullScreen for textures')
       }
-      log.debug('createTexture', size, t.props)
+      log.debug('createTexture', props.size, props)
       if (t.format !== t.props.format) {
         t.format = t.props.format
-        t.formatVersion++
+        t.formatHash = mulberry32hash(GPUTextureFormatId[t.format])
       }
-      view = t.view = (t.handle = device.createTexture({ ...t.props, size })).createView()
+      view = t.view = (t.handle = device.createTexture(props)).createView()
       t.invalidate = () => {
         if (t.invalidate) canvasResized.off(t.invalidate)
         t.handle!.destroy()
@@ -229,7 +270,16 @@ export function root(canvas: HTMLCanvasElement): Root {
   function validateDevice() {
     validating ||= Promise.resolve()
       .then(async () => {
-        const features = root.features.map(f => f.props.name)
+        const features: GPUExtensionName[] = []
+        let limits: GPULimits | undefined
+        for (let x = root.first; x !== undefined; x = x.next) {
+          const { type } = x
+          if (type === Type.Feature) {
+            features.push((x as DescriptorType[typeof type]).props.name)
+          } else if (type === Type.Limits) {
+            limits = (x as DescriptorType[typeof type]).props
+          }
+        }
         log.debug('initializing adapter & device', features)
 
         context = (canvas.getContext('gpupresent') as unknown) as GPUCanvasContext
@@ -241,7 +291,7 @@ export function root(canvas: HTMLCanvasElement): Root {
         if (!adapter) throw new InitError('Failed to init WebGPU adapter!')
 
         device = (await adapter.requestDevice(({
-          nonGuaranteedLimits: root.limits?.props,
+          nonGuaranteedLimits: limits,
           nonGuaranteedFeatures: features
         } as unknown) as GPUDeviceDescriptor))!
         if (!device) throw new InitError('Failed to init WebGPU device!')

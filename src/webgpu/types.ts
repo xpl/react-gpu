@@ -1,4 +1,5 @@
-import { Subtract, RequiredKeys, OptionalKeys } from 'utility-types'
+import { Subtract, RequiredKeys } from 'utility-types'
+import { GPUTextureFormatId } from './enums'
 
 export const enum Type {
   Root = 0,
@@ -57,9 +58,13 @@ export const defaultPropsMap = {
   [Type.ColorAttachment]: asDefaults<reactgpu.ColorAttachmentProps>()({
     attachment: (undefined as unknown) as GPUTextureView
   }),
-  [Type.DepthStencilAttachment]: asDefaults<reactgpu.DepthStencilAttachmentProps>()({}),
-  [Type.SwapChain]: asDefaults<reactgpu.SwapChainProps>()({}),
-  [Type.Texture]: asDefaults<reactgpu.TextureProps>()({}),
+  [Type.DepthStencilAttachment]: asDefaults<reactgpu.DepthStencilAttachmentProps>()({
+    attachment: (undefined as unknown) as GPUTextureView
+  }),
+  [Type.SwapChain]: asDefaults<reactgpu.SwapChainProps>()({
+    device: (undefined as unknown) as GPUDevice
+  }),
+  [Type.Texture]: asDefaults<reactgpu.TextureProps>()({ size: [-1, -1, -1] }),
   [Type.RenderBundle]: asDefaults<reactgpu.RenderBundleProps>()({
     colorFormats: [],
     depthStencilFormat: undefined,
@@ -88,60 +93,55 @@ export const defaultProps = Array.from({
 
 const _assertDefaultPropsExhaustiveness: { [K in Type]: unknown } = defaultPropsMap
 
-export type Descriptor<T extends Type = Type, Child = unknown> = {
+export type Descriptor<T extends Type = Type> = {
   type: T
   props: OriginalType<typeof defaultPropsMap[T]>
   parent?: Descriptor
-  root?: Root
-  children: Child[]
+  first?: Descriptor
+  last?: Descriptor
+  prev?: Descriptor
+  next?: Descriptor
 }
 
-export type Root = Descriptor<Type.Root, Command> & {
+export type Root = Descriptor<Type.Root> & {
   readonly canvas: HTMLCanvasElement
-  limits?: Limits
-  features: Feature[]
+  commands?: Command[]
   swapChain: SwapChain
   invalidate(): void
   canvasResized(): void
   encodeAndSubmit(): void
   setProps(props: RootProps): Root
 }
-export type Limits = Descriptor<Type.Limits> & { root: Root }
-export type Feature = Descriptor<Type.Feature> & { root: Root }
-export type Command = Descriptor<Type.Command, RenderPass>
-export type ColorAttachment = Descriptor<Type.ColorAttachment, Texture>
-export type DepthStencilAttachment = Descriptor<Type.DepthStencilAttachment, Texture>
+export type Limits = Descriptor<Type.Limits>
+export type Feature = Descriptor<Type.Feature>
+export type Command = Descriptor<Type.Command>
+export type ColorAttachment = Descriptor<Type.ColorAttachment>
+export type DepthStencilAttachment = Descriptor<Type.DepthStencilAttachment>
 export type SwapChain = Descriptor<Type.SwapChain> & {
   handle?: GPUSwapChain
   view?: GPUTextureView
   format: GPUTextureFormat
-  formatVersion: number
+  formatHash: number
 }
 export type Texture = Descriptor<Type.Texture> & {
   handle?: GPUTexture
   view?: GPUTextureView
   format: GPUTextureFormat
-  formatVersion: number
+  formatHash: number
   invalidate?: () => void
 }
-export type RenderPass = Descriptor<Type.RenderPass, RenderBundle> & {
-  colorAttachments: ColorAttachment[]
-  depthStencilAttachment?: DepthStencilAttachment
+export type RenderPass = Descriptor<Type.RenderPass> & {
   colorFormats: GPUTextureFormat[]
   depthStencilFormat: GPUTextureFormat
-  formatVersion: 0
+  formatHash: number
 }
-export type RenderBundle = Descriptor<Type.RenderBundle, RenderPipeline> & {
+export type RenderBundle = Descriptor<Type.RenderBundle> & {
   handle?: GPURenderBundle
-  formatVersion: number
+  formatHash: number
 }
-export type RenderPipeline = Descriptor<Type.RenderPipeline, Draw> & {
+export type RenderPipeline = Descriptor<Type.RenderPipeline> & {
   handle?: GPURenderPipeline
-  multisampleState?: MultisampleState
-  depthStencilState?: DepthStencilState
-  fragmentStates: ColorTargetState[]
-  shaderModules: ShaderModule[]
-  gpuProps: GPURenderPipelineDescriptorNew
+  gpuProps: GPURenderPipelineDescriptorNew & { vertex: { buffers: GPUVertexBufferLayout[] } }
 }
 export type ColorTargetState = Descriptor<Type.ColorTargetState> & {
   gpuProps: GPUColorTargetState
@@ -196,20 +196,20 @@ type NonEmptyAdditonalKeys = {
 const defaults: { [K in Type]?: object } = {
   [Type.SwapChain]: {
     format: placeholderColorFormat,
-    formatVersion: 0
+    formatHash: 0
   },
   [Type.Texture]: {
     format: placeholderColorFormat,
-    formatVersion: 0
+    formatHash: 0
   },
   [Type.RenderPass]: {
     colorAttachments: [],
     colorFormats: [],
     depthStencilFormat: placeholderDepthStencilFormat,
-    formatVersion: 0
+    formatHash: 0
   },
   [Type.RenderBundle]: {
-    formatVersion: 0
+    formatHash: 0
   },
   [Type.RenderPipeline]: {
     fragmentStates: [],
@@ -217,7 +217,8 @@ const defaults: { [K in Type]?: object } = {
     gpuProps: {
       vertex: {
         module: (undefined as unknown) as GPUShaderModule,
-        entryPoint: ''
+        entryPoint: '',
+        buffers: []
       }
     }
   },
@@ -233,11 +234,9 @@ const defaults: { [K in Type]?: object } = {
   [Type.Root]: (undefined as unknown) as Root // we never create root via `makeDescriptor`, so it's fine
 } as NonEmptyAdditonalKeys
 
-export const makeDescriptor = (type: Type, root: Root, props: object): Descriptor => ({
+export const makeDescriptor = (type: Type, props: object): Descriptor => ({
   type,
-  root,
   props: { ...defaultProps[type], ...props },
   parent: undefined,
-  children: [],
   ...defaults[type]
 })
