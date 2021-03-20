@@ -145,7 +145,9 @@ const reconciler = ReactReconciler<
     }
     const child = webgpu.makeDescriptor(type, props)
 
-    if (type === webgpu.Type.ColorTargetState) {
+    if (type === webgpu.Type.Draw) {
+      prepareDrawArgs(child as DescriptorType[typeof type])
+    } else if (type === webgpu.Type.ColorTargetState) {
       const { gpuProps, props } = child as DescriptorType[typeof type]
       assignColorTargetState(gpuProps, props)
     } else if (type === webgpu.Type.ShaderModule) {
@@ -219,7 +221,9 @@ const reconciler = ReactReconciler<
     console.log('commitUpdate', _type, oldProps, newProps)
     Object.assign(child.props, newProps)
     const { type } = child
-    if (type === webgpu.Type.ColorTargetState) {
+    if (type === webgpu.Type.Draw) {
+      prepareDrawArgs(child as DescriptorType[typeof type])
+    } else if (type === webgpu.Type.ColorTargetState) {
       const { gpuProps, props } = child as DescriptorType[typeof type]
       assignColorTargetState(gpuProps, props)
       invalidateRenderPipeline(child.parent as webgpu.RenderPipeline)
@@ -270,6 +274,13 @@ function assignColorTargetState(
   alpha.operation = props.alphaBlendOp
 }
 
+function prepareDrawArgs({ args, props }: webgpu.Draw) {
+  args[0] = props.vertexCount
+  args[1] = props.instanceCount
+  args[2] = props.firstVertex
+  args[3] = props.firstInstance
+}
+
 function invalidateRoot(x: webgpu.Root) {
   x.invalidate()
 }
@@ -304,6 +315,9 @@ const invalidate = {
   },
   [webgpu.Type.VertexAttribute](parent: webgpu.VertexBufferLayout) {
     parent.attributes = undefined
+  },
+  [webgpu.Type.Draw](parent: webgpu.RenderPipeline) {
+    parent.drawCalls = undefined
   }
 }
 

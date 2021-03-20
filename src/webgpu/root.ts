@@ -14,7 +14,8 @@ import {
   DescriptorType,
   VertexAttribute,
   VertexBufferLayout,
-  BindBuffer
+  BindBuffer,
+  Draw
 } from './types'
 import { GPUTextureFormatId, gpuVertexFormatByteLength } from './enums'
 
@@ -144,9 +145,11 @@ export function root(canvas: HTMLCanvasElement): Root {
       props.colorFormats = colorFormats
       props.depthStencilFormat = depthStencilFormat
       const encoder = device.createRenderBundleEncoder(props)
-      for (let pipeline = bundle.first; pipeline !== undefined; pipeline = pipeline.next) {
-        const handle = validateRenderPipeline(pipeline as RenderPipeline, depthStencilFormat).handle
-        // TODO...
+      for (let x = bundle.first; x !== undefined; x = x.next) {
+        const pipeline = validateRenderPipeline(x as RenderPipeline, depthStencilFormat)
+        for (const draw of pipeline.drawCalls) {
+          encoder.draw(...draw.args)
+        }
       }
       bundle.handle = encoder.finish()
     }
@@ -166,9 +169,12 @@ export function root(canvas: HTMLCanvasElement): Root {
       vertexLayouts.length = 0
       gpuProps.multisample = undefined
       gpuProps.primitive = pipeline.props
+      const drawCalls: Draw[] = (pipeline.drawCalls = [])
       for (let x = pipeline.first; x !== undefined; x = x.next) {
         const { type } = x
-        if (type === Type.VertexBufferLayout) {
+        if (type === Type.Draw) {
+          drawCalls.push(x as Draw)
+        } else if (type === Type.VertexBufferLayout) {
           vertexLayouts.push(validateVertexLayout(x as VertexBufferLayout))
         } else if (validatingLayout && type === Type.BindBuffer) {
           const { visibility, binding } = (x as BindBuffer).props
@@ -222,7 +228,13 @@ export function root(canvas: HTMLCanvasElement): Root {
       log.debug('createRenderPipeline', gpuProps)
       pipeline.handle = device.createRenderPipeline(gpuProps)
     }
-    return pipeline as { handle: GPURenderPipeline }
+    if (!pipeline.drawCalls) {
+      const drawCalls: Draw[] = (pipeline.drawCalls = [])
+      for (let x = pipeline.first; x !== undefined; x = x.next) {
+        if (x.type === Type.Draw) drawCalls.push(x as Draw)
+      }
+    }
+    return pipeline as typeof pipeline & { handle: GPURenderPipeline; drawCalls: Draw[] }
   }
 
   function validateVertexLayout(layout: VertexBufferLayout): GPUVertexBufferLayout {

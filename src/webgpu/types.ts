@@ -94,7 +94,7 @@ export const defaultPropsMap = {
     shaderLocation: -1 // computed
   }),
   [Type.VertexBuffer]: asDefaults<object>()({}),
-  [Type.Draw]: asDefaults<object>()({}),
+  [Type.Draw]: asDefaults<reactgpu.DrawProps>()({}),
   [Type.MAX]: {}
 } as const
 
@@ -154,6 +154,7 @@ export type RenderBundle = Descriptor<Type.RenderBundle> & {
 export type RenderPipeline = Descriptor<Type.RenderPipeline> & {
   handle?: GPURenderPipeline
   bindGroupLayout: GPUBindGroupLayout | undefined | null // null = no bind group, undefined = invald
+  drawCalls?: Draw[]
   gpuProps: GPURenderPipelineDescriptorNew & {
     vertex: { buffers: GPUVertexBufferLayout[] }
   }
@@ -173,7 +174,9 @@ export type VertexBufferLayout = Descriptor<Type.VertexBufferLayout> & {
 }
 export type VertexAttribute = Descriptor<Type.VertexAttribute>
 export type VertexBuffer = Descriptor<Type.VertexBuffer>
-export type Draw = Descriptor<Type.Draw>
+export type Draw = Descriptor<Type.Draw> & {
+  args: Parameters<GPURenderBundleEncoder['draw']>
+}
 
 type Map<From> = From extends Descriptor<infer T> ? Pick<{ [K in Type]: From }, T> : never
 
@@ -249,6 +252,9 @@ const defaults: { [K in Type]?: object } = {
   },
   [Type.VertexAttribute]: {
     attributes: undefined
+  },
+  [Type.Draw]: {
+    args: [-1, undefined, undefined, undefined]
   },
   [Type.Root]: (undefined as unknown) as Root // we never create root via `makeDescriptor`, so it's fine
 } as NonEmptyAdditonalKeys

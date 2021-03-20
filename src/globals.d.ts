@@ -65,7 +65,12 @@ declare module reactgpu {
 
   type BindBufferProps = GPUBufferBindingLayout & BindGroupLayoutEntryProps
 
-  type DrawProps = { vertexCount: number }
+  type DrawProps = {
+    vertexCount: number
+    instanceCount?: number
+    firstVertex?: number
+    firstInstance?: number
+  }
 
   interface IntrinsicElements {
     'gpu-feature': FeatureProps
