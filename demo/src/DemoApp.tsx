@@ -101,7 +101,7 @@ function DemoApp() {
                 stencilStoreOp="store"
               >
                 <gpu-texture
-                  fullScreen={true}
+                  fullScreen
                   mipLevelCount={1}
                   sampleCount={1}
                   dimension="2d"
@@ -112,7 +112,7 @@ function DemoApp() {
               <gpu-render-bundle>
                 <gpu-render-pipeline topology="line-list" frontFace="cw" cullMode="none">
                   <gpu-multisample count={0} />
-                  <gpu-depth-stencil depthCompare="less" depthWriteEnabled={true} />
+                  <gpu-depth-stencil depthCompare="less" depthWriteEnabled />
                   <gpu-color-target
                     alphaBlendOp="add"
                     alphaBlendSrc="src-alpha"

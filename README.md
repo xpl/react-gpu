@@ -29,7 +29,7 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
           stencilStoreOp="store"
         >
           <gpu-texture
-            fullScreen={true}
+            fullScreen
             mipLevelCount={1}
             sampleCount={1}
             dimension="2d"
@@ -39,7 +39,7 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
         </gpu-depth-stencil-attachment>
         <gpu-render-bundle>
           <gpu-render-pipeline topology="line-list" frontFace="cw" cullMode="none">
-            <gpu-depth-stencil depthCompare="less" depthWriteEnabled={true} />
+            <gpu-depth-stencil depthCompare="less" depthWriteEnabled />
             <gpu-color-target
               alphaBlendOp="add"
               alphaBlendSrc="src-alpha"
