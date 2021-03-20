@@ -7,18 +7,16 @@
 A research project with the goal to explore the advantages of [React](https://reactjs.org/) component
 model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gpuweb.github.io/gpuweb/)).
 
-- Integrates seamlessly with `react-dom`
 - Exposes basic **WebGPU** concepts via [JSX tags](https://reactjs.org/docs/introducing-jsx.html), 100% declarative
-- Efficiently manages the lifecycle of GPU objects
+- Efficiently manages the lifecycle of retained GPU objects
 - Handles boring stuff like context management, resizing, animation loop, etc.
+- Integrates seamlessly with `react-dom`
 - Aims to provide easily composable blocks for building higher level graphics components
 
 ```tsx
 <AnimationLoop isRunning={isRunning}>
   <DemoComponent />
   <GPUCanvas className="canvas-3d" powerPreference="high-performance" verbose>
-    <gpu-feature name="pipeline-statistics-query" />
-    <gpu-feature name="texture-compression-bc" />
     <gpu-swap-chain format="preferred" usage={GPUTextureUsage.RENDER_ATTACHMENT} />
     <gpu-command>
       <gpu-render-pass>
