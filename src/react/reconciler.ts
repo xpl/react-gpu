@@ -22,7 +22,7 @@ const intrinsicElementNameToType = {
   'gpu-color-target': webgpu.Type.ColorTargetState,
   'gpu-multisample': webgpu.Type.MultisampleState,
   'gpu-depth-stencil': webgpu.Type.DepthStencilState,
-  'gpu-bind-uniform': webgpu.Type.BindUniform,
+  'gpu-bind-buffer': webgpu.Type.BindBuffer,
   'gpu-uniform-buffer': webgpu.Type.UniformBuffer,
   'gpu-shader-module': webgpu.Type.ShaderModule,
   'gpu-vertex-buffer-layout': webgpu.Type.VertexBufferLayout,
@@ -50,7 +50,7 @@ const isAllowedParent = Array.from({
   [webgpu.Type.ColorTargetState]: p => p === webgpu.Type.RenderPipeline,
   [webgpu.Type.MultisampleState]: p => p === webgpu.Type.RenderPipeline,
   [webgpu.Type.DepthStencilState]: p => p === webgpu.Type.RenderPipeline,
-  [webgpu.Type.BindUniform]: p => p === webgpu.Type.RenderPipeline,
+  [webgpu.Type.BindBuffer]: p => p === webgpu.Type.RenderPipeline,
   [webgpu.Type.ShaderModule]: p => p === webgpu.Type.RenderPipeline,
   [webgpu.Type.VertexBufferLayout]: p => p === webgpu.Type.RenderPipeline,
   [webgpu.Type.VertexAttribute]: p => p === webgpu.Type.VertexBufferLayout,
@@ -155,7 +155,11 @@ const reconciler = ReactReconciler<
   },
 
   shouldSetTextContent(typeName: keyof reactgpu.IntrinsicElements, props) {
-    return typeName === 'gpu-shader-module'
+    return (
+      typeName === 'gpu-shader-module' ||
+      typeName === 'gpu-vertex-buffer' ||
+      typeName === 'gpu-uniform-buffer'
+    )
   },
 
   createTextInstance(text, rootContainerInstance, hostContext, internalInstanceHandle) {
@@ -285,6 +289,10 @@ const invalidate = {
   [webgpu.Type.ColorTargetState]: invalidateRenderPipeline,
   [webgpu.Type.VertexBufferLayout]: invalidateRenderPipeline,
   [webgpu.Type.ShaderModule]: invalidateRenderPipeline,
+  [webgpu.Type.BindBuffer](parent: webgpu.RenderPipeline) {
+    parent.bindGroupLayout = undefined
+    invalidateRenderPipeline(parent)
+  },
   [webgpu.Type.SwapChain](parent: webgpu.Descriptor, child: webgpu.SwapChain) {
     child.handle = undefined
   },

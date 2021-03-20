@@ -17,7 +17,7 @@ export const enum Type {
   ColorTargetState,
   DepthStencilState,
   ShaderModule,
-  BindUniform,
+  BindBuffer,
   UniformBuffer,
   VertexBufferLayout,
   VertexAttribute,
@@ -81,7 +81,9 @@ export const defaultPropsMap = {
   [Type.ShaderModule]: asDefaults<reactgpu.ShaderModuleProps>()({
     code: ''
   }),
-  [Type.BindUniform]: asDefaults<object>()({}),
+  [Type.BindBuffer]: asDefaults<reactgpu.BindBufferProps>()({
+    binding: -1 // computed
+  }),
   [Type.UniformBuffer]: asDefaults<object>()({}),
   [Type.VertexBufferLayout]: asDefaults<reactgpu.VertexBufferLayoutProps>()({
     attributes: [],
@@ -151,7 +153,10 @@ export type RenderBundle = Descriptor<Type.RenderBundle> & {
 }
 export type RenderPipeline = Descriptor<Type.RenderPipeline> & {
   handle?: GPURenderPipeline
-  gpuProps: GPURenderPipelineDescriptorNew & { vertex: { buffers: GPUVertexBufferLayout[] } }
+  bindGroupLayout: GPUBindGroupLayout | undefined | null // null = no bind group, undefined = invald
+  gpuProps: GPURenderPipelineDescriptorNew & {
+    vertex: { buffers: GPUVertexBufferLayout[] }
+  }
 }
 export type ColorTargetState = Descriptor<Type.ColorTargetState> & {
   gpuProps: GPUColorTargetState
@@ -161,7 +166,7 @@ export type DepthStencilState = Descriptor<Type.DepthStencilState>
 export type ShaderModule = Descriptor<Type.ShaderModule> & {
   handle?: GPUShaderModule
 }
-export type BindUniform = Descriptor<Type.BindUniform>
+export type BindBuffer = Descriptor<Type.BindBuffer>
 export type UniformBuffer = Descriptor<Type.UniformBuffer>
 export type VertexBufferLayout = Descriptor<Type.VertexBufferLayout> & {
   attributes?: GPUVertexAttribute[]
@@ -186,7 +191,7 @@ export type DescriptorType = Map<Root> &
   Map<ColorTargetState> &
   Map<MultisampleState> &
   Map<DepthStencilState> &
-  Map<BindUniform> &
+  Map<BindBuffer> &
   Map<UniformBuffer> &
   Map<ShaderModule> &
   Map<VertexBufferLayout> &
@@ -215,7 +220,6 @@ const defaults: { [K in Type]?: object } = {
     formatHash: 0
   },
   [Type.RenderPass]: {
-    colorAttachments: [],
     colorFormats: [],
     depthStencilFormat: placeholderDepthStencilFormat,
     formatHash: 0
@@ -224,14 +228,14 @@ const defaults: { [K in Type]?: object } = {
     formatHash: 0
   },
   [Type.RenderPipeline]: {
-    fragmentStates: [],
-    shaderModules: [],
+    bindGroupLayout: undefined,
     gpuProps: {
       vertex: {
         module: (undefined as unknown) as GPUShaderModule,
         entryPoint: '',
         buffers: []
-      }
+      },
+      layout: undefined
     }
   },
   [Type.ColorTargetState]: {

@@ -58,6 +58,15 @@ declare module reactgpu {
 
   type VertexAttributeProps = Optional<GPUVertexAttribute, 'offset' | 'shaderLocation'>
 
+  type BindGroupLayoutEntryProps = Optional<
+    Pick<GPUBindGroupLayoutEntry, 'binding' | 'visibility'>,
+    'binding'
+  >
+
+  type BindBufferProps = GPUBufferBindingLayout & BindGroupLayoutEntryProps
+
+  type DrawProps = { vertexCount: number }
+
   interface IntrinsicElements {
     'gpu-feature': FeatureProps
     'gpu-limits': GPULimits
@@ -72,13 +81,13 @@ declare module reactgpu {
     'gpu-multisample': GPUMultisampleState
     'gpu-depth-stencil': DepthStencilStateProps
     'gpu-color-target': ColorTargetStateProps & JSXChildren
-    'gpu-bind-uniform': JSXChildren
+    'gpu-bind-buffer': BindBufferProps & JSXChildren
     'gpu-shader-module': ShaderModuleProps & { children: string }
     'gpu-vertex-buffer-layout': VertexBufferLayoutProps & JSXChildren
     'gpu-vertex-attribute': VertexAttributeProps
-    'gpu-draw': JSXChildren
-    'gpu-vertex-buffer': JSXChildren
-    'gpu-uniform-buffer': JSXChildren
+    'gpu-draw': DrawProps & JSXChildren
+    'gpu-vertex-buffer': { children: ArrayBufferLike | number[] }
+    'gpu-uniform-buffer': { children: ArrayBufferLike | number[] }
   }
 }
 

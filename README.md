@@ -31,7 +31,6 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
           <gpu-texture
             fullScreen
             mipLevelCount={1}
-            sampleCount={1}
             dimension="2d"
             format="depth24plus-stencil8"
             usage={GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC}
@@ -52,7 +51,11 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
               <gpu-vertex-attribute format="float32x3" />
               <gpu-vertex-attribute format="float32x4" />
             </gpu-vertex-buffer-layout>
-            ...
+            <gpu-bind-buffer type="uniform" visibility={GPUShaderStage.VERTEX} />
+            <gpu-draw vertexCount={6}>
+              <gpu-uniform-buffer>{uniformData}</gpu-uniform-buffer>
+              <gpu-vertex-buffer>{vertexData}</gpu-vertex-buffer>
+            </gpu-draw>
           </gpu-render-pipeline>
         </gpu-render-bundle>
       </gpu-render-pass>

@@ -13,7 +13,8 @@ import {
   ShaderModule,
   DescriptorType,
   VertexAttribute,
-  VertexBufferLayout
+  VertexBufferLayout,
+  BindBuffer
 } from './types'
 import { GPUTextureFormatId, gpuVertexFormatByteLength } from './enums'
 
@@ -155,26 +156,38 @@ export function root(canvas: HTMLCanvasElement): Root {
   function validateRenderPipeline(pipeline: RenderPipeline, depthStencilFormat: GPUTextureFormat) {
     let { handle } = pipeline
     if (!handle) {
-      const { gpuProps } = pipeline
+      const { gpuProps, bindGroupLayout } = pipeline
       const shaderModules: ShaderModule[] = []
       const fragmentStates: GPUColorTargetState[] = []
-      let multisampleState: GPUMultisampleState | undefined
-      let depthStencilState: GPUDepthStencilState | undefined
+      const bindGroupLayoutEntries: GPUBindGroupLayoutEntry[] = []
+      const validatingLayout = bindGroupLayout === undefined
+      let nextBinding = 0
       let vertexLayouts = gpuProps.vertex.buffers
       vertexLayouts.length = 0
+      gpuProps.multisample = undefined
+      gpuProps.primitive = pipeline.props
       for (let x = pipeline.first; x !== undefined; x = x.next) {
         const { type } = x
         if (type === Type.VertexBufferLayout) {
           vertexLayouts.push(validateVertexLayout(x as VertexBufferLayout))
+        } else if (validatingLayout && type === Type.BindBuffer) {
+          const { visibility, binding } = (x as BindBuffer).props
+          const currentBinding = binding === -1 ? nextBinding : binding
+          bindGroupLayoutEntries.push({
+            binding: currentBinding,
+            visibility,
+            buffer: (x as BindBuffer).props
+          })
+          nextBinding = currentBinding + 1
         } else if (type === Type.ShaderModule) {
           shaderModules.push(x as DescriptorType[typeof type])
         } else if (type === Type.ColorTargetState) {
           fragmentStates.push((x as DescriptorType[typeof type]).gpuProps)
         } else if (type === Type.DepthStencilState) {
-          depthStencilState = (x as DescriptorType[typeof type]).props
-          depthStencilState.format = depthStencilFormat
+          gpuProps.depthStencil = (x as DescriptorType[typeof type]).props
+          gpuProps.depthStencil.format = depthStencilFormat
         } else if (type === Type.MultisampleState) {
-          multisampleState = (x as DescriptorType[typeof type]).props
+          gpuProps.multisample = (x as DescriptorType[typeof type]).props
         }
       }
       const m1 = shaderModules[0]
@@ -193,9 +206,19 @@ export function root(canvas: HTMLCanvasElement): Root {
             targets: fragmentStates
           }
         : undefined
-      gpuProps.primitive = pipeline.props
-      gpuProps.depthStencil = depthStencilState
-      gpuProps.multisample = multisampleState
+      if (validatingLayout) {
+        if (bindGroupLayoutEntries.length) {
+          pipeline.bindGroupLayout = device.createBindGroupLayout({
+            entries: bindGroupLayoutEntries
+          })
+          pipeline.gpuProps.layout = device.createPipelineLayout({
+            bindGroupLayouts: [pipeline.bindGroupLayout]
+          })
+        } else {
+          pipeline.bindGroupLayout = null
+          pipeline.gpuProps.layout = undefined
+        }
+      }
       log.debug('createRenderPipeline', gpuProps)
       pipeline.handle = device.createRenderPipeline(gpuProps)
     }

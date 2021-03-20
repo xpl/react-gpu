@@ -103,7 +103,6 @@ function DemoApp() {
                 <gpu-texture
                   fullScreen
                   mipLevelCount={1}
-                  sampleCount={1}
                   dimension="2d"
                   format="depth24plus-stencil8"
                   usage={GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC}
@@ -111,7 +110,6 @@ function DemoApp() {
               </gpu-depth-stencil-attachment>
               <gpu-render-bundle>
                 <gpu-render-pipeline topology="line-list" frontFace="cw" cullMode="none">
-                  <gpu-multisample count={0} />
                   <gpu-depth-stencil depthCompare="less" depthWriteEnabled />
                   <gpu-color-target
                     alphaBlendOp="add"
@@ -125,6 +123,11 @@ function DemoApp() {
                     <gpu-vertex-attribute format="float32x3" />
                     <gpu-vertex-attribute format="float32x4" />
                   </gpu-vertex-buffer-layout>
+                  <gpu-bind-buffer type="uniform" visibility={GPUShaderStage.VERTEX} />
+                  <gpu-draw vertexCount={6}>
+                    <gpu-uniform-buffer>{uniformData}</gpu-uniform-buffer>
+                    <gpu-vertex-buffer>{vertexData}</gpu-vertex-buffer>
+                  </gpu-draw>
                 </gpu-render-pipeline>
               </gpu-render-bundle>
             </gpu-render-pass>
@@ -136,14 +139,3 @@ function DemoApp() {
 }
 
 render(<DemoApp />, document.getElementById('root'))
-
-//                   <gpu-shader-module>{code}</gpu-shader-module>
-//                   <gpu-bind-uniform visibility={GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT} />
-//                   <gpu-vertex-buffer-layout stepMode="vertex">
-//                     <gpu-vertex-attribute format="float3" />
-//                     <gpu-vertex-attribute format="float4" />
-//                   </gpu-vertex-buffer-layout>
-//                   <gpu-draw vertexCount={6}>
-//                     <gpu-uniform-buffer>{uniformData}</gpu-uniform-buffer>
-//                     <gpu-vertex-buffer>{vertexData}</gpu-vertex-buffer>
-//                   </gpu-draw>
