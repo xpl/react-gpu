@@ -45,7 +45,9 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
               alphaBlendSrc="src-alpha"
               alphaBlendDst="one-minus-src-alpha"
             />
-            <gpu-shader-module vertexEntryPoint="main_vert" fragmentEntryPoint="main_frag">{code}</gpu-shader-module>
+            <gpu-shader-module vertexEntryPoint="main_vert" fragmentEntryPoint="main_frag">
+              {code}
+            </gpu-shader-module>
             ...
           </gpu-render-pipeline>
         </gpu-render-bundle>
