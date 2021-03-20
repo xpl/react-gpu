@@ -5,6 +5,7 @@ import {
   Command,
   RenderPass,
   RenderBundle,
+  RenderPipeline,
   Root,
   RootProps,
   Texture,
@@ -66,17 +67,18 @@ export function root(canvas: HTMLCanvasElement): Root {
     if (invalid) {
       validateDevice()
     } else {
+      const swapChain = validateSwapChain()
       const commandBuffers: GPUCommandBuffer[] = []
       for (const command of commands) {
         const commandEncoder = device.createCommandEncoder(command.props)
         for (const renderPass of command.children) {
-          withAttachments(renderPass, props => {
-            const passEncoder = commandEncoder.beginRenderPass(props)
-            passEncoder.executeBundles(
-              renderPass.children.map(rb => validateRenderBundle(rb, renderPass))
-            )
-            passEncoder.endPass()
-          })
+          const passEncoder = commandEncoder.beginRenderPass(
+            validateRenderPassAttachments(renderPass, swapChain)
+          )
+          passEncoder.executeBundles(
+            renderPass.children.map(rb => validateRenderBundle(rb, renderPass))
+          )
+          passEncoder.endPass()
         }
         commandBuffers.push(commandEncoder.finish())
       }
@@ -84,55 +86,78 @@ export function root(canvas: HTMLCanvasElement): Root {
     }
   }
 
-  function withAttachments(
-    pass: RenderPass,
-    encodePass: (renderPass: GPURenderPassDescriptor) => void
-  ) {
-    const swapChain = validateSwapChain()
-    const colorAttachments: GPURenderPassColorAttachmentDescriptor[] = []
+  function validateRenderPassAttachments(pass: RenderPass, swapChain: ValidTexture) {
+    const { props } = pass
     pass.colorFormats = []
     pass.formatVersion = 0
+    props.colorAttachments = []
     for (const att of pass.colorAttachments) {
       const texture = att.children[0] ? validateTexture(att.children[0]) : swapChain
       pass.colorFormats.push(texture.format)
       pass.formatVersion += texture.formatVersion
-      colorAttachments.push({ ...att.props, attachment: texture.view })
+      att.props.attachment = texture.view
+      props.colorAttachments.push(att.props)
     }
-    let depthStencilAttachment: GPURenderPassDepthStencilAttachmentDescriptor | undefined
-    if (pass.depthStencilAttachment?.children[0]) {
+    if (pass.depthStencilAttachment?.children[0] !== undefined) {
       const texture = validateTexture(pass.depthStencilAttachment.children[0])
       pass.depthStencilFormat = texture.format
       pass.formatVersion += texture.formatVersion
-      depthStencilAttachment = {
+      props.depthStencilAttachment = {
         ...pass.depthStencilAttachment.props,
         attachment: texture.view
       }
+    } else {
+      props.depthStencilAttachment = undefined
     }
-    encodePass({
-      ...pass.props,
-      colorAttachments,
-      depthStencilAttachment
-    })
+    return props
   }
 
   function validateRenderBundle(bundle: RenderBundle, pass: RenderPass) {
     if (bundle.handle === undefined || bundle.formatVersion !== pass.formatVersion) {
       bundle.formatVersion = pass.formatVersion
       const { props } = bundle
-      props.colorFormats = pass.colorFormats
-      props.depthStencilFormat = pass.depthStencilFormat
+      const { colorFormats, depthStencilFormat } = pass
+      props.colorFormats = colorFormats
+      props.depthStencilFormat = depthStencilFormat
       const encoder = device.createRenderBundleEncoder(props)
       for (const pipeline of bundle.children) {
-        const { gpuProps, shaderModule } = pipeline
-        if (!shaderModule) continue
-        gpuProps.vertex.module = validateShaderModule(shaderModule).handle
-        // if (pipeline.depthStencilState) {
-        //   pipelineDesc.
-        // }
+        const handle = validateRenderPipeline(pipeline, depthStencilFormat).handle
       }
       bundle.handle = encoder.finish()
     }
     return bundle.handle
+  }
+
+  function validateRenderPipeline(pipeline: RenderPipeline, depthStencilFormat: GPUTextureFormat) {
+    let { handle } = pipeline
+    if (!handle) {
+      const { gpuProps, shaderModules, fragmentStates } = pipeline
+      const m1 = shaderModules[0]
+      const m2 = shaderModules[1]
+      const vertModule = m1?.props.vertexEntryPoint !== undefined ? m1 : m2
+      const fragModule =
+        fragmentStates.length && m1?.props.fragmentEntryPoint !== undefined ? m1 : m2
+      if (vertModule === undefined) throw new InvalidProps('must specify a vertex shader entry')
+      const { vertex } = gpuProps
+      vertex.module = validateShaderModule(vertModule).handle
+      vertex.entryPoint = vertModule.props.vertexEntryPoint!
+      gpuProps.fragment = fragModule
+        ? {
+            entryPoint: fragModule.props.fragmentEntryPoint!,
+            module: validateShaderModule(fragModule).handle,
+            targets: fragmentStates.map(s => s.gpuProps)
+          }
+        : undefined
+
+      const depthStencilProps = pipeline.depthStencilState?.props
+      if (depthStencilProps !== undefined) depthStencilProps.format = depthStencilFormat
+      gpuProps.depthStencil = depthStencilProps
+      gpuProps.primitive = pipeline.props
+      gpuProps.multisample = pipeline.multisampleState?.props
+      // gpuProps.layout // TODO
+      pipeline.handle = device.createRenderPipeline(gpuProps)
+    }
+    return pipeline as { handle: GPURenderPipeline }
   }
 
   type ValidTexture = { format: GPUTextureFormat; view: GPUTextureView; formatVersion: number }

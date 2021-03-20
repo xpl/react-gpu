@@ -1,9 +1,11 @@
 declare module reactgpu {
-  type ReplaceIterableWithArray<T> = {
-    [P in keyof T]: T[P] extends string ? T[P] : T[P] extends Iterable<infer Elem> ? Elem[] : T[P]
-  }
+  // Helpers for omitting/optionalizing some fields from original WebGPU definitions to make
+  // React props from them. We save dropped fields in __dropped, to recover the original type later
+  // when we actually instantiating the descriptor structures.
+  type Drop<T, K> = Omit<T, K> & { __dropped?: Pick<T, K> }
+  type Optional<T, K> = Omit<T, K> & Partial<Pick<T, K>> & { __dropped?: Pick<T, K> }
 
-  type ColorAttachmentProps = Omit<GPURenderPassColorAttachmentDescriptor, 'attachment'>
+  type ColorAttachmentProps = Drop<GPURenderPassColorAttachmentDescriptor, 'attachment'>
 
   type DepthStencilAttachmentProps = Omit<
     GPURenderPassDepthStencilAttachmentDescriptor,
@@ -17,14 +19,12 @@ declare module reactgpu {
     format: GPUTextureFormat | 'preferred'
   }
 
-  type RenderPassProps = Omit<
+  type RenderPassProps = Drop<
     GPURenderPassDescriptor,
     'colorAttachments' | 'depthStencilAttachment'
   >
 
-  type OmitPubliclyButRequireInternally<T, K> = Omit<T, K> & { __omitted?: Pick<T, K> }
-
-  type DepthStencilStateProps = OmitPubliclyButRequireInternally<GPUDepthStencilState, 'format'>
+  type DepthStencilStateProps = Drop<GPUDepthStencilState, 'format'>
 
   type ColorTargetStateProps = {
     writeMask?: GPUColorWriteFlags
@@ -36,12 +36,16 @@ declare module reactgpu {
     colorBlendDst?: GPUBlendFactor
   }
 
-  type RenderBundleProps = OmitPubliclyButRequireInternally<
+  type RenderBundleProps = Drop<
     GPURenderBundleEncoderDescriptor,
     'colorFormats' | 'depthStencilFormat' | 'sampleCount' // auto-taken from attachments
   >
 
-  type ShaderModuleProps = OmitPubliclyButRequireInternally<GPUShaderModuleDescriptor, 'code'> & {
+  type RenderPipelineProps = GPUPrimitiveState
+
+  type ShaderModuleProps = Drop<GPUShaderModuleDescriptor, 'code'> & {
+    vertexEntryPoint?: string
+    fragmentEntryPoint?: string
     onCompilationInfo?: (info: GPUCompilationInfo) => void
   }
 
@@ -50,6 +54,10 @@ declare module reactgpu {
   }
 
   type FeatureProps = { name: GPUExtensionName }
+
+  type VertexBufferLayoutProps = Drop<GPUVertexBufferLayout, 'attributes'>
+
+  type VertexAttributeProps = Optional<GPUVertexAttribute, 'offset'>
 
   interface IntrinsicElements {
     'gpu-feature': FeatureProps
@@ -61,13 +69,13 @@ declare module reactgpu {
     'gpu-texture': TextureProps
     'gpu-swap-chain': SwapChainProps
     'gpu-render-bundle': RenderBundleProps & IntrinsicElementChildren
-    'gpu-pipeline': GPUPrimitiveState & IntrinsicElementChildren
+    'gpu-render-pipeline': RenderPipelineProps & IntrinsicElementChildren
     'gpu-multisample': GPUMultisampleState
     'gpu-depth-stencil': DepthStencilStateProps
     'gpu-color-target': ColorTargetStateProps & IntrinsicElementChildren
     'gpu-bind-uniform': IntrinsicElementChildren
     'gpu-shader-module': ShaderModuleProps & { children: string }
-    'gpu-vertex-buffer-layout': IntrinsicElementChildren
+    'gpu-vertex-buffer-layout': VertexBufferLayoutProps & IntrinsicElementChildren
     'gpu-vertex-attribute': IntrinsicElementChildren
     'gpu-draw': IntrinsicElementChildren
     'gpu-vertex-buffer': IntrinsicElementChildren

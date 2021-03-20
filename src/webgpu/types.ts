@@ -11,7 +11,7 @@ export const enum Type {
   SwapChain,
   Texture,
   RenderBundle,
-  Pipeline,
+  RenderPipeline,
   MultisampleState,
   ColorTargetState,
   DepthStencilState,
@@ -27,46 +27,57 @@ export const enum Type {
 
 const placeholderColorFormat = 'bgra8unorm'
 const placeholderDepthStencilFormat = 'depth24unorm-stencil8'
-
 type OriginalType<T> = T extends { __originalType?: infer U } ? (unknown extends U ? T : U) : T
-type Omitted<T> = T extends { __omitted?: infer U } ? (unknown extends U ? {} : U) : {}
+type Dropped<T> = T extends { __dropped?: infer U } ? (unknown extends U ? {} : U) : {}
 
-const asDefaults = <T = object>(
-  props: Pick<T, OptionalKeys<T>> & Omitted<T>
-): typeof props & { __originalType?: T & Omitted<T> } => props
+// Iterable<number> → number[]
+type HydrateIterables<T, Props extends T> = {
+  [P in keyof T]: T[P] extends Iterable<infer Elem>
+    ? Props[P] extends Array<Elem>
+      ? Elem[]
+      : T[P]
+    : T[P]
+}
+
+const asDefaults = <T = object>() => <Props extends Dropped<T>>(
+  props: Props
+): Props & { __originalType?: T & HydrateIterables<Dropped<T>, Props> } => props
 
 export type RootProps = GPURequestAdapterOptions & { verbose: boolean }
 
 export const defaultPropsMap = {
-  [Type.Root]: asDefaults<RootProps>({}),
-  [Type.Limits]: asDefaults<GPULimits>({}),
-  [Type.Feature]: asDefaults<reactgpu.FeatureProps>({}),
-  [Type.Command]: asDefaults<GPUCommandEncoderDescriptor>({}),
-  [Type.RenderPass]: asDefaults<reactgpu.RenderPassProps>({}),
-  [Type.ColorAttachment]: asDefaults<reactgpu.ColorAttachmentProps>({}),
-  [Type.DepthStencilAttachment]: asDefaults<reactgpu.DepthStencilAttachmentProps>({}),
-  [Type.SwapChain]: asDefaults<reactgpu.SwapChainProps>({}),
-  [Type.Texture]: asDefaults<reactgpu.TextureProps>({}),
-  [Type.RenderBundle]: asDefaults<reactgpu.RenderBundleProps>({
+  [Type.Root]: asDefaults<RootProps>()({}),
+  [Type.Limits]: asDefaults<GPULimits>()({}),
+  [Type.Feature]: asDefaults<reactgpu.FeatureProps>()({}),
+  [Type.Command]: asDefaults<GPUCommandEncoderDescriptor>()({}),
+  [Type.RenderPass]: asDefaults<reactgpu.RenderPassProps>()({
+    colorAttachments: [],
+    depthStencilAttachment: undefined
+  }),
+  [Type.ColorAttachment]: asDefaults<reactgpu.ColorAttachmentProps>()({
+    attachment: (undefined as unknown) as GPUTextureView
+  }),
+  [Type.DepthStencilAttachment]: asDefaults<reactgpu.DepthStencilAttachmentProps>()({}),
+  [Type.SwapChain]: asDefaults<reactgpu.SwapChainProps>()({}),
+  [Type.Texture]: asDefaults<reactgpu.TextureProps>()({}),
+  [Type.RenderBundle]: asDefaults<reactgpu.RenderBundleProps>()({
     colorFormats: [],
     depthStencilFormat: undefined,
     sampleCount: undefined
   }),
-  [Type.Pipeline]: asDefaults<GPUPrimitiveState>({}),
-  [Type.ColorTargetState]: asDefaults<reactgpu.ColorTargetStateProps>({}),
-  [Type.MultisampleState]: asDefaults<GPUMultisampleState>({}),
-  [Type.DepthStencilState]: asDefaults<reactgpu.DepthStencilStateProps>({
+  [Type.RenderPipeline]: asDefaults<reactgpu.RenderPipelineProps>()({}),
+  [Type.ColorTargetState]: asDefaults<reactgpu.ColorTargetStateProps>()({}),
+  [Type.MultisampleState]: asDefaults<GPUMultisampleState>()({}),
+  [Type.DepthStencilState]: asDefaults<reactgpu.DepthStencilStateProps>()({
     format: placeholderDepthStencilFormat
   }),
-  [Type.ShaderModule]: asDefaults<reactgpu.ShaderModuleProps>({
-    code: ''
-  }),
-  [Type.BindUniform]: asDefaults<object>({}),
-  [Type.UniformBuffer]: asDefaults<object>({}),
-  [Type.VertexBufferLayout]: asDefaults<object>({}),
-  [Type.VertexAttribute]: asDefaults<object>({}),
-  [Type.VertexBuffer]: asDefaults<object>({}),
-  [Type.Draw]: asDefaults<object>({}),
+  [Type.ShaderModule]: asDefaults<reactgpu.ShaderModuleProps>()({ code: '' }),
+  [Type.BindUniform]: asDefaults<object>()({}),
+  [Type.UniformBuffer]: asDefaults<object>()({}),
+  [Type.VertexBufferLayout]: asDefaults<reactgpu.VertexBufferLayoutProps>()({ attributes: [] }),
+  [Type.VertexAttribute]: asDefaults<reactgpu.VertexAttributeProps>()({ offset: -1 }),
+  [Type.VertexBuffer]: asDefaults<object>()({}),
+  [Type.Draw]: asDefaults<object>()({}),
   [Type.MAX]: {}
 } as const
 
@@ -120,16 +131,17 @@ export type RenderPass = Descriptor<Type.RenderPass, RenderBundle> & {
   depthStencilFormat: GPUTextureFormat
   formatVersion: 0
 }
-export type RenderBundle = Descriptor<Type.RenderBundle, Pipeline> & {
+export type RenderBundle = Descriptor<Type.RenderBundle, RenderPipeline> & {
   handle?: GPURenderBundle
   formatVersion: number
 }
-export type Pipeline = Descriptor<Type.Pipeline, Draw> & {
+export type RenderPipeline = Descriptor<Type.RenderPipeline, Draw> & {
+  handle?: GPURenderPipeline
   multisampleState?: MultisampleState
   depthStencilState?: DepthStencilState
   fragmentStates: ColorTargetState[]
+  shaderModules: ShaderModule[]
   gpuProps: GPURenderPipelineDescriptorNew
-  shaderModule?: ShaderModule
 }
 export type ColorTargetState = Descriptor<Type.ColorTargetState> & {
   gpuProps: GPUColorTargetState
@@ -158,7 +170,7 @@ export type DescriptorType = Map<Root> &
   Map<Texture> &
   Map<RenderPass> &
   Map<RenderBundle> &
-  Map<Pipeline> &
+  Map<RenderPipeline> &
   Map<ColorTargetState> &
   Map<MultisampleState> &
   Map<DepthStencilState> &
@@ -199,8 +211,9 @@ const defaults: { [K in Type]?: object } = {
   [Type.RenderBundle]: {
     formatVersion: 0
   },
-  [Type.Pipeline]: {
+  [Type.RenderPipeline]: {
     fragmentStates: [],
+    shaderModules: [],
     gpuProps: {
       vertex: {
         module: (undefined as unknown) as GPUShaderModule,

@@ -12,7 +12,6 @@ function DemoComponent() {
   const { isRunning } = useAnimationLoop((dt, t) => {
     setText(t.toFixed(1))
   })
-
   return (
     <span>
       {' ' + text} {isRunning ? ' 🔴' : ''}
@@ -111,7 +110,7 @@ function DemoApp() {
                 />
               </gpu-depth-stencil-attachment>
               <gpu-render-bundle>
-                <gpu-pipeline topology="line-list" frontFace="cw" cullMode="none">
+                <gpu-render-pipeline topology="line-list" frontFace="cw" cullMode="none">
                   <gpu-multisample count={0} />
                   <gpu-depth-stencil depthCompare="less" depthWriteEnabled={true} />
                   <gpu-color-target
@@ -119,8 +118,14 @@ function DemoApp() {
                     alphaBlendSrc="src-alpha"
                     alphaBlendDst="one-minus-src-alpha"
                   />
-                  <gpu-shader-module>{code}</gpu-shader-module>
-                </gpu-pipeline>
+                  <gpu-shader-module vertexEntryPoint="main_vert" fragmentEntryPoint="main_frag">
+                    {code}
+                  </gpu-shader-module>
+                  <gpu-vertex-buffer-layout stepMode="vertex">
+                    <gpu-vertex-attribute format="float3" />
+                    <gpu-vertex-attribute format="float4" />
+                  </gpu-vertex-buffer-layout>
+                </gpu-render-pipeline>
               </gpu-render-bundle>
             </gpu-render-pass>
           </gpu-command>
@@ -132,24 +137,6 @@ function DemoApp() {
 
 render(<DemoApp />, document.getElementById('root'))
 
-// <gpu-swap-chain format="preferred" usage={GPUTextureUsage.RENDER_ATTACHMENT} />
-// <gpu-command>
-//               <gpu-render-bundle>
-//                 <gpu-pipeline
-//                   primitiveTopology="line-list"
-//                   frontFace="cw"
-//                   cullMode="none"
-//                   depthWriteEnabled={true}
-//                   depthCompare="less"
-//                 >
-//                   <gpu-color-state
-//                     alphaBlendOp="add"
-//                     alphaBlendSrc="src-alpha"
-//                     alphaBlendDst="one-minus-src-alpha"
-//                     colorBlendOp="add"
-//                     colorBlendSrc="src-alpha"
-//                     colorBlendDst="one-minus-src-alpha"
-//                   />
 //                   <gpu-shader-module>{code}</gpu-shader-module>
 //                   <gpu-bind-uniform visibility={GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT} />
 //                   <gpu-vertex-buffer-layout stepMode="vertex">
@@ -160,7 +147,3 @@ render(<DemoApp />, document.getElementById('root'))
 //                     <gpu-uniform-buffer>{uniformData}</gpu-uniform-buffer>
 //                     <gpu-vertex-buffer>{vertexData}</gpu-vertex-buffer>
 //                   </gpu-draw>
-//                 </gpu-pipeline>
-//               </gpu-render-bundle>
-//             </gpu-render-pass>
-//           </gpu-command>

@@ -32,7 +32,7 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
           />
         </gpu-depth-stencil-attachment>
         <gpu-render-bundle>
-          <gpu-pipeline
+          <gpu-render-pipeline
             primitiveTopology="line-list"
             frontFace="cw"
             cullMode="none"
@@ -57,7 +57,7 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
               <gpu-uniform-buffer>{uniformData}</gpu-uniform-buffer>
               <gpu-vertex-buffer>{vertexData}</gpu-vertex-buffer>
             </gpu-draw>
-          </gpu-pipeline>
+          </gpu-render-pipeline>
         </gpu-render-bundle>
       </gpu-render-pass>
     </gpu-command>
