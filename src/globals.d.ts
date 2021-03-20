@@ -54,9 +54,9 @@ declare module reactgpu {
 
   type FeatureProps = { name: GPUExtensionName }
 
-  type VertexBufferLayoutProps = Drop<GPUVertexBufferLayout, 'attributes'>
+  type VertexBufferLayoutProps = Optional<Drop<GPUVertexBufferLayout, 'attributes'>, 'arrayStride'>
 
-  type VertexAttributeProps = Optional<GPUVertexAttribute, 'offset'>
+  type VertexAttributeProps = Optional<GPUVertexAttribute, 'offset' | 'shaderLocation'>
 
   interface IntrinsicElements {
     'gpu-feature': FeatureProps
@@ -75,7 +75,7 @@ declare module reactgpu {
     'gpu-bind-uniform': JSXChildren
     'gpu-shader-module': ShaderModuleProps & { children: string }
     'gpu-vertex-buffer-layout': VertexBufferLayoutProps & JSXChildren
-    'gpu-vertex-attribute': JSXChildren
+    'gpu-vertex-attribute': VertexAttributeProps
     'gpu-draw': JSXChildren
     'gpu-vertex-buffer': JSXChildren
     'gpu-uniform-buffer': JSXChildren

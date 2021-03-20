@@ -293,6 +293,9 @@ const invalidate = {
   },
   [webgpu.Type.Command](root: webgpu.Root) {
     root.commands = undefined
+  },
+  [webgpu.Type.VertexAttribute](parent: webgpu.VertexBufferLayout) {
+    parent.attributes = undefined
   }
 }
 

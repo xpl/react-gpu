@@ -12,10 +12,10 @@ import {
   Texture,
   ShaderModule,
   DescriptorType,
-  ColorTargetState,
-  DepthStencilAttachment
+  VertexAttribute,
+  VertexBufferLayout
 } from './types'
-import { GPUTextureFormatId } from './enums'
+import { GPUTextureFormatId, gpuVertexFormatByteLength } from './enums'
 
 export class InitError extends Error {}
 export class InvalidProps extends Error {}
@@ -99,8 +99,10 @@ export function root(canvas: HTMLCanvasElement): Root {
   }
 
   function* validateRenderBundles(pass: RenderPass) {
-    for (let bundle = pass.first; bundle !== undefined; bundle = bundle.next) {
-      yield validateRenderBundle(bundle as RenderBundle, pass)
+    for (let x = pass.first; x !== undefined; x = x.next) {
+      if (x.type === Type.RenderBundle) {
+        yield validateRenderBundle(x as RenderBundle, pass)
+      }
     }
   }
 
@@ -153,13 +155,18 @@ export function root(canvas: HTMLCanvasElement): Root {
   function validateRenderPipeline(pipeline: RenderPipeline, depthStencilFormat: GPUTextureFormat) {
     let { handle } = pipeline
     if (!handle) {
+      const { gpuProps } = pipeline
       const shaderModules: ShaderModule[] = []
       const fragmentStates: GPUColorTargetState[] = []
       let multisampleState: GPUMultisampleState | undefined
       let depthStencilState: GPUDepthStencilState | undefined
+      let vertexLayouts = gpuProps.vertex.buffers
+      vertexLayouts.length = 0
       for (let x = pipeline.first; x !== undefined; x = x.next) {
         const { type } = x
-        if (type === Type.ShaderModule) {
+        if (type === Type.VertexBufferLayout) {
+          vertexLayouts.push(validateVertexLayout(x as VertexBufferLayout))
+        } else if (type === Type.ShaderModule) {
           shaderModules.push(x as DescriptorType[typeof type])
         } else if (type === Type.ColorTargetState) {
           fragmentStates.push((x as DescriptorType[typeof type]).gpuProps)
@@ -170,7 +177,6 @@ export function root(canvas: HTMLCanvasElement): Root {
           multisampleState = (x as DescriptorType[typeof type]).props
         }
       }
-      const { gpuProps } = pipeline
       const m1 = shaderModules[0]
       const m2 = shaderModules[1]
       const vertModule = m1?.props.vertexEntryPoint !== undefined ? m1 : m2
@@ -190,10 +196,30 @@ export function root(canvas: HTMLCanvasElement): Root {
       gpuProps.primitive = pipeline.props
       gpuProps.depthStencil = depthStencilState
       gpuProps.multisample = multisampleState
-      // gpuProps.layout // TODO
+      log.debug('createRenderPipeline', gpuProps)
       pipeline.handle = device.createRenderPipeline(gpuProps)
     }
     return pipeline as { handle: GPURenderPipeline }
+  }
+
+  function validateVertexLayout(layout: VertexBufferLayout): GPUVertexBufferLayout {
+    let { attributes, props } = layout
+    if (!attributes) {
+      attributes = layout.attributes = props.attributes
+      attributes.length = 0
+      let nextOffset = 0
+      let nextLocation = 0
+      for (let attr = layout.first; attr !== undefined; attr = attr.next) {
+        const { props } = attr as VertexAttribute
+        if (props.offset === -1) props.offset = nextOffset
+        if (props.shaderLocation === -1) props.shaderLocation = nextLocation
+        nextOffset += gpuVertexFormatByteLength[props.format]
+        nextLocation++
+        attributes.push(props)
+      }
+      if (props.arrayStride === -1) props.arrayStride = nextOffset
+    }
+    return props
   }
 
   type ValidTexture = {

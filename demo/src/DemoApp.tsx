@@ -121,10 +121,10 @@ function DemoApp() {
                   <gpu-shader-module vertexEntryPoint="main_vert" fragmentEntryPoint="main_frag">
                     {code}
                   </gpu-shader-module>
-                  {/* <gpu-vertex-buffer-layout stepMode="vertex">
-                    <gpu-vertex-attribute format="float3" />
-                    <gpu-vertex-attribute format="float4" />
-                  </gpu-vertex-buffer-layout> */}
+                  <gpu-vertex-buffer-layout stepMode="vertex">
+                    <gpu-vertex-attribute format="float32x3" />
+                    <gpu-vertex-attribute format="float32x4" />
+                  </gpu-vertex-buffer-layout>
                 </gpu-render-pipeline>
               </gpu-render-bundle>
             </gpu-render-pass>

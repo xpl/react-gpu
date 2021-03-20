@@ -64,7 +64,9 @@ export const defaultPropsMap = {
   [Type.SwapChain]: asDefaults<reactgpu.SwapChainProps>()({
     device: (undefined as unknown) as GPUDevice
   }),
-  [Type.Texture]: asDefaults<reactgpu.TextureProps>()({ size: [-1, -1, -1] }),
+  [Type.Texture]: asDefaults<reactgpu.TextureProps>()({
+    size: [-1, -1, -1]
+  }),
   [Type.RenderBundle]: asDefaults<reactgpu.RenderBundleProps>()({
     colorFormats: [],
     depthStencilFormat: undefined,
@@ -76,11 +78,19 @@ export const defaultPropsMap = {
   [Type.DepthStencilState]: asDefaults<reactgpu.DepthStencilStateProps>()({
     format: placeholderDepthStencilFormat
   }),
-  [Type.ShaderModule]: asDefaults<reactgpu.ShaderModuleProps>()({ code: '' }),
+  [Type.ShaderModule]: asDefaults<reactgpu.ShaderModuleProps>()({
+    code: ''
+  }),
   [Type.BindUniform]: asDefaults<object>()({}),
   [Type.UniformBuffer]: asDefaults<object>()({}),
-  [Type.VertexBufferLayout]: asDefaults<reactgpu.VertexBufferLayoutProps>()({ attributes: [] }),
-  [Type.VertexAttribute]: asDefaults<reactgpu.VertexAttributeProps>()({ offset: -1 }),
+  [Type.VertexBufferLayout]: asDefaults<reactgpu.VertexBufferLayoutProps>()({
+    attributes: [],
+    arrayStride: -1 // computed
+  }),
+  [Type.VertexAttribute]: asDefaults<reactgpu.VertexAttributeProps>()({
+    offset: -1, // computed
+    shaderLocation: -1 // computed
+  }),
   [Type.VertexBuffer]: asDefaults<object>()({}),
   [Type.Draw]: asDefaults<object>()({}),
   [Type.MAX]: {}
@@ -153,7 +163,9 @@ export type ShaderModule = Descriptor<Type.ShaderModule> & {
 }
 export type BindUniform = Descriptor<Type.BindUniform>
 export type UniformBuffer = Descriptor<Type.UniformBuffer>
-export type VertexBufferLayout = Descriptor<Type.VertexBufferLayout>
+export type VertexBufferLayout = Descriptor<Type.VertexBufferLayout> & {
+  attributes?: GPUVertexAttribute[]
+}
 export type VertexAttribute = Descriptor<Type.VertexAttribute>
 export type VertexBuffer = Descriptor<Type.VertexBuffer>
 export type Draw = Descriptor<Type.Draw>
@@ -230,6 +242,9 @@ const defaults: { [K in Type]?: object } = {
         alpha: {}
       }
     }
+  },
+  [Type.VertexAttribute]: {
+    attributes: undefined
   },
   [Type.Root]: (undefined as unknown) as Root // we never create root via `makeDescriptor`, so it's fine
 } as NonEmptyAdditonalKeys

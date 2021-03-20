@@ -58,3 +58,44 @@ export enum GPUTextureFormatId {
   'bc7-rgba-unorm',
   'bc7-rgba-unorm-srgb'
 } // 57
+
+type _AssertGPUTextureFormatExhaustiveness = typeof GPUTextureFormatId[GPUTextureFormat]
+
+const b8 = 1 as const
+const b16 = 2 as const
+const b32 = 4 as const
+
+export const gpuVertexFormatByteLength: {
+  [K in GPUVertexFormat]: number
+} = {
+  uint8x2: b8 * 2,
+  uint8x4: b8 * 4,
+  sint8x2: b8 * 2,
+  sint8x4: b8 * 4,
+  unorm8x2: b8 * 2,
+  unorm8x4: b8 * 4,
+  snorm8x2: b8 * 2,
+  snorm8x4: b8 * 4,
+  uint16x2: b16 * 2,
+  uint16x4: b16 * 4,
+  sint16x2: b16 * 2,
+  sint16x4: b16 * 4,
+  unorm16x2: b16 * 2,
+  unorm16x4: b16 * 4,
+  snorm16x2: b16 * 2,
+  snorm16x4: b16 * 4,
+  float16x2: b16 * 2,
+  float16x4: b16 * 4,
+  float32: b32,
+  float32x2: b32 * 2,
+  float32x3: b32 * 3,
+  float32x4: b32 * 4,
+  uint32: b32,
+  uint32x2: b32 * 2,
+  uint32x3: b32 * 3,
+  uint32x4: b32 * 4,
+  sint32: b32,
+  sint32x2: b32 * 2,
+  sint32x3: b32 * 3,
+  sint32x4: b32 * 4
+} as const
