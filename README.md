@@ -1,5 +1,9 @@
 # react-gpu
 
+```diff
+- Currently in the very early stages of development, nothing to see here basically :) Subscribe!
+```
+
 A research project with the goal to explore the advantages of [React](https://reactjs.org/) component
 model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gpuweb.github.io/gpuweb/)).
 
@@ -10,13 +14,14 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
 
 ```tsx
 <AnimationLoop isRunning={isRunning}>
+  <DemoComponent />
   <GPUCanvas className="canvas-3d" powerPreference="high-performance" verbose>
-    <gpu-extension name="pipeline-statistics-query" />
-    <gpu-extension name="timestamp-query" />
+    <gpu-feature name="pipeline-statistics-query" />
+    <gpu-feature name="texture-compression-bc" />
     <gpu-swap-chain format="preferred" usage={GPUTextureUsage.RENDER_ATTACHMENT} />
     <gpu-command>
       <gpu-render-pass>
-        <gpu-color-attachment loadValue={[0.25, 0.28, 0.26, 1.0]} storeOp="store" />
+        <gpu-color-attachment loadValue={clearColor} storeOp="store" />
         <gpu-depth-stencil-attachment
           depthLoadValue={1.0}
           depthStoreOp="store"
@@ -24,6 +29,7 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
           stencilStoreOp="store"
         >
           <gpu-texture
+            fullScreen={true}
             mipLevelCount={1}
             sampleCount={1}
             dimension="2d"
@@ -32,31 +38,15 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
           />
         </gpu-depth-stencil-attachment>
         <gpu-render-bundle>
-          <gpu-render-pipeline
-            primitiveTopology="line-list"
-            frontFace="cw"
-            cullMode="none"
-            depthWriteEnabled={true}
-            depthCompare="less"
-          >
-            <gpu-color-state
+          <gpu-render-pipeline topology="line-list" frontFace="cw" cullMode="none">
+            <gpu-depth-stencil depthCompare="less" depthWriteEnabled={true} />
+            <gpu-color-target
               alphaBlendOp="add"
               alphaBlendSrc="src-alpha"
               alphaBlendDst="one-minus-src-alpha"
-              colorBlendOp="add"
-              colorBlendSrc="src-alpha"
-              colorBlendDst="one-minus-src-alpha"
             />
-            <gpu-shader-module>{code}</gpu-shader-module>
-            <gpu-bind-uniform visibility={GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT} />
-            <gpu-vertex-buffer-layout>
-              <gpu-vertex-attribute format="float3" />
-              <gpu-vertex-attribute format="float4" />
-            </gpu-vertex-buffer-layout>
-            <gpu-draw vertexCount={6}>
-              <gpu-uniform-buffer>{uniformData}</gpu-uniform-buffer>
-              <gpu-vertex-buffer>{vertexData}</gpu-vertex-buffer>
-            </gpu-draw>
+            <gpu-shader-module vertexEntryPoint="main_vert" fragmentEntryPoint="main_frag">{code}</gpu-shader-module>
+            ...
           </gpu-render-pipeline>
         </gpu-render-bundle>
       </gpu-render-pass>
@@ -66,5 +56,3 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
 ```
 
 ![Screen Shot 2020-12-19 at 7 30 08 PM](https://user-images.githubusercontent.com/1707/102694248-d12a3600-4230-11eb-9223-89e9dcc1e596.jpg)
-
-_Currently in the very early stages of development, nothing to see here basically :) Subscribe!_
