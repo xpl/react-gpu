@@ -15,7 +15,11 @@ import {
   VertexAttribute,
   VertexBufferLayout,
   BindBuffer,
-  Draw
+  Draw,
+  VertexBuffer,
+  UniformBuffer,
+  BindGroupLayout,
+  SetVertexBufferArgs
 } from './types'
 import { GPUTextureFormatId, gpuVertexFormatByteLength } from './enums'
 
@@ -148,6 +152,13 @@ export function root(canvas: HTMLCanvasElement): Root {
       for (let x = bundle.first; x !== undefined; x = x.next) {
         const pipeline = validateRenderPipeline(x as RenderPipeline, depthStencilFormat)
         for (const draw of pipeline.drawCalls) {
+          if (draw.invalid) validateDraw(draw, pipeline.bindGroupLayouts)
+          for (const args of draw.vertexBuffersArgs) {
+            encoder.setVertexBuffer(args[0], args[1], args[2], args[3])
+          }
+          for (const args of draw.bindGroupsArgs) {
+            encoder.setBindGroup(args[0], args[1])
+          }
           encoder.draw(...draw.args)
         }
       }
@@ -159,12 +170,11 @@ export function root(canvas: HTMLCanvasElement): Root {
   function validateRenderPipeline(pipeline: RenderPipeline, depthStencilFormat: GPUTextureFormat) {
     let { handle } = pipeline
     if (!handle) {
-      const { gpuProps, bindGroupLayout } = pipeline
+      const { gpuProps } = pipeline
       const shaderModules: ShaderModule[] = []
       const fragmentStates: GPUColorTargetState[] = []
-      const bindGroupLayoutEntries: GPUBindGroupLayoutEntry[] = []
-      const validatingLayout = bindGroupLayout === undefined
-      let nextBinding = 0
+      const bindGroupLayouts: GPUBindGroupLayout[] = []
+      const validatingLayout = pipeline.pipelineLayout === undefined
       let vertexLayouts = gpuProps.vertex.buffers
       vertexLayouts.length = 0
       gpuProps.multisample = undefined
@@ -176,15 +186,8 @@ export function root(canvas: HTMLCanvasElement): Root {
           drawCalls.push(x as Draw)
         } else if (type === Type.VertexBufferLayout) {
           vertexLayouts.push(validateVertexLayout(x as VertexBufferLayout))
-        } else if (validatingLayout && type === Type.BindBuffer) {
-          const { visibility, binding } = (x as BindBuffer).props
-          const currentBinding = binding === -1 ? nextBinding : binding
-          bindGroupLayoutEntries.push({
-            binding: currentBinding,
-            visibility,
-            buffer: (x as BindBuffer).props
-          })
-          nextBinding = currentBinding + 1
+        } else if (validatingLayout && type === Type.BindGroupLayout) {
+          bindGroupLayouts.push(validateBindGroupLayout(x as BindGroupLayout))
         } else if (type === Type.ShaderModule) {
           shaderModules.push(x as DescriptorType[typeof type])
         } else if (type === Type.ColorTargetState) {
@@ -213,17 +216,10 @@ export function root(canvas: HTMLCanvasElement): Root {
           }
         : undefined
       if (validatingLayout) {
-        if (bindGroupLayoutEntries.length) {
-          pipeline.bindGroupLayout = device.createBindGroupLayout({
-            entries: bindGroupLayoutEntries
-          })
-          pipeline.gpuProps.layout = device.createPipelineLayout({
-            bindGroupLayouts: [pipeline.bindGroupLayout]
-          })
-        } else {
-          pipeline.bindGroupLayout = null
-          pipeline.gpuProps.layout = undefined
-        }
+        pipeline.bindGroupLayouts = bindGroupLayouts
+        gpuProps.layout = bindGroupLayouts.length
+          ? device.createPipelineLayout({ bindGroupLayouts })
+          : undefined
       }
       log.debug('createRenderPipeline', gpuProps)
       pipeline.handle = device.createRenderPipeline(gpuProps)
@@ -255,6 +251,25 @@ export function root(canvas: HTMLCanvasElement): Root {
       if (props.arrayStride === -1) props.arrayStride = nextOffset
     }
     return props
+  }
+
+  function validateBindGroupLayout(layout: BindGroupLayout): GPUBindGroupLayout {
+    let { handle } = layout
+    if (!handle) {
+      const entries: GPUBindGroupLayoutEntry[] = []
+      for (let x = layout.first, nextBinding = 0; x !== undefined; x = x.next) {
+        const { visibility, binding } = (x as BindBuffer).props
+        const currentBinding = binding === -1 ? nextBinding : binding
+        entries.push({
+          binding: currentBinding,
+          visibility,
+          buffer: (x as BindBuffer).props
+        })
+        nextBinding = currentBinding + 1
+      }
+      return (layout.handle = device.createBindGroupLayout({ entries }))
+    }
+    return handle
   }
 
   type ValidTexture = {
@@ -326,6 +341,53 @@ export function root(canvas: HTMLCanvasElement): Root {
       }
     }
     return m as { handle: GPUShaderModule }
+  }
+
+  function validateDraw(draw: Draw, bindGroupLayouts: GPUBindGroupLayout[]) {
+    const { vertexBuffersArgs, bindGroupsArgs } = draw
+    let currentBindGroup: GPUBindGroupEntry[] = []
+    let bindGroups = [currentBindGroup]
+    let currentBindGroupIndex = -1
+    let currentBinding = 0
+    for (let x = draw.first; x !== undefined; x = x.next) {
+      const { type } = x
+      if (type === Type.VertexBuffer) {
+        vertexBuffersArgs.push(validateVertexBuffer(x as DescriptorType[typeof type]))
+      } else if (type === Type.UniformBuffer) {
+        const props = validateUniformBuffer(x as DescriptorType[typeof type])
+        const { set, binding } = props
+        if (set !== -1 && set !== currentBindGroupIndex) {
+          currentBindGroupIndex = set
+          currentBindGroup = bindGroups[set] ||= []
+        }
+        if (binding !== -1) {
+          currentBinding = binding
+        }
+        currentBindGroup[currentBinding++] = props
+      }
+    }
+    bindGroupsArgs.length = bindGroups.length
+    for (let i = 0, n = bindGroups.length; i !== n; i++) {
+      bindGroupsArgs[i] = [
+        i,
+        device.createBindGroup({
+          layout: bindGroupLayouts[i]!,
+          entries: bindGroups[i]!
+        })
+      ]
+    }
+    draw.invalid = false
+  }
+
+  function validateVertexBuffer(buffer: VertexBuffer): SetVertexBufferArgs {
+    // TODO
+  }
+
+  function validateUniformBuffer(buffer: UniformBuffer): UniformBuffer['props'] {
+    if (!buffer.props.resource) {
+      // TODO
+    }
+    return buffer.props
   }
 
   function validateDevice() {

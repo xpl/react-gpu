@@ -1,13 +1,17 @@
 import ReactReconciler from 'react-reconciler'
 import * as webgpu from '../webgpu'
 import { DescriptorType } from '../webgpu'
+import { assertRecordType } from '../common'
 
 type HTMLCanvasElementWithGPU = HTMLCanvasElement & {
   _gpuRoot: webgpu.Root
   _gpuContainer: ReturnType<typeof reconciler.createContainer>
 }
 
-const intrinsicElementNameToType = {
+const intrinsicElementNameToType = assertRecordType<
+  keyof reactgpu.IntrinsicElements | 'GPUCanvas',
+  webgpu.Type
+>()({
   GPUCanvas: webgpu.Type.Root,
   'gpu-limits': webgpu.Type.Limits,
   'gpu-feature': webgpu.Type.Feature,
@@ -22,6 +26,7 @@ const intrinsicElementNameToType = {
   'gpu-color-target': webgpu.Type.ColorTargetState,
   'gpu-multisample': webgpu.Type.MultisampleState,
   'gpu-depth-stencil': webgpu.Type.DepthStencilState,
+  'gpu-bind-group-layout': webgpu.Type.BindGroupLayout,
   'gpu-bind-buffer': webgpu.Type.BindBuffer,
   'gpu-uniform-buffer': webgpu.Type.UniformBuffer,
   'gpu-shader-module': webgpu.Type.ShaderModule,
@@ -29,7 +34,7 @@ const intrinsicElementNameToType = {
   'gpu-vertex-attribute': webgpu.Type.VertexAttribute,
   'gpu-vertex-buffer': webgpu.Type.VertexBuffer,
   'gpu-draw': webgpu.Type.Draw
-} as const
+} as const)
 
 function typeName(x: webgpu.Type) {
   return (Object.entries(intrinsicElementNameToType).find(([, v]) => v === x) || ['unknown'])[0]
@@ -50,7 +55,8 @@ const isAllowedParent = Array.from({
   [webgpu.Type.ColorTargetState]: p => p === webgpu.Type.RenderPipeline,
   [webgpu.Type.MultisampleState]: p => p === webgpu.Type.RenderPipeline,
   [webgpu.Type.DepthStencilState]: p => p === webgpu.Type.RenderPipeline,
-  [webgpu.Type.BindBuffer]: p => p === webgpu.Type.RenderPipeline,
+  [webgpu.Type.BindGroupLayout]: p => p === webgpu.Type.RenderPipeline,
+  [webgpu.Type.BindBuffer]: p => p === webgpu.Type.BindGroupLayout,
   [webgpu.Type.ShaderModule]: p => p === webgpu.Type.RenderPipeline,
   [webgpu.Type.VertexBufferLayout]: p => p === webgpu.Type.RenderPipeline,
   [webgpu.Type.VertexAttribute]: p => p === webgpu.Type.VertexBufferLayout,
@@ -233,7 +239,7 @@ const reconciler = ReactReconciler<
       invalidateRenderPipeline(child.parent as webgpu.RenderPipeline)
     } else {
       // @ts-ignore
-      invalidate[type]?.(child.parent, child)
+      invalidate[type]?.(child.parent, child, true)
     }
   },
 
@@ -292,6 +298,13 @@ function invalidateRenderPipeline(pipeline: webgpu.RenderPipeline) {
   }
 }
 
+function invalidateBindGroupLayout(layout: webgpu.BindGroupLayout) {
+  layout.handle = undefined
+  const pipeline = layout.parent as webgpu.RenderPipeline
+  pipeline.pipelineLayout = undefined
+  invalidateRenderPipeline(pipeline)
+}
+
 const invalidate = {
   [webgpu.Type.Feature]: invalidateRoot,
   [webgpu.Type.Limits]: invalidateRoot,
@@ -300,10 +313,10 @@ const invalidate = {
   [webgpu.Type.ColorTargetState]: invalidateRenderPipeline,
   [webgpu.Type.VertexBufferLayout]: invalidateRenderPipeline,
   [webgpu.Type.ShaderModule]: invalidateRenderPipeline,
-  [webgpu.Type.BindBuffer](parent: webgpu.RenderPipeline) {
-    parent.bindGroupLayout = undefined
-    invalidateRenderPipeline(parent)
+  [webgpu.Type.BindGroupLayout](parent: webgpu.RenderPipeline, child: webgpu.BindGroupLayout) {
+    invalidateBindGroupLayout(child)
   },
+  [webgpu.Type.BindBuffer]: invalidateBindGroupLayout,
   [webgpu.Type.SwapChain](parent: webgpu.Descriptor, child: webgpu.SwapChain) {
     child.handle = undefined
   },
@@ -315,9 +328,15 @@ const invalidate = {
   },
   [webgpu.Type.VertexAttribute](parent: webgpu.VertexBufferLayout) {
     parent.attributes = undefined
+    if (parent.parent) invalidateRenderPipeline(parent.parent as webgpu.RenderPipeline)
   },
   [webgpu.Type.Draw](parent: webgpu.RenderPipeline) {
     parent.drawCalls = undefined
+    if (parent.parent) (parent.parent as webgpu.RenderBundle).handle = undefined
+  },
+  [webgpu.Type.VertexBuffer](parent: webgpu.Draw, child: webgpu.VertexBuffer, byProps: boolean) {
+    if (!byProps) parent.invalid = true
+    if (!propsOnly) invalidateRenderPipeline(parent.parent)
   }
 }
 
@@ -332,7 +351,7 @@ function appendChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
   parent.first ||= child
   parent.last = child
   // @ts-ignore
-  invalidate[child.type]?.(parent, child)
+  invalidate[child.type]?.(parent, child, false)
 }
 
 function insertBefore(
@@ -363,7 +382,7 @@ function insertBefore(
   child.parent = parent
 
   // @ts-ignore
-  invalidate[type]?.(parent, child)
+  invalidate[type]?.(parent, child, false)
 }
 
 function removeChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
@@ -383,7 +402,7 @@ function removeChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
   child.parent = undefined
 
   // @ts-ignore
-  invalidate[type]?.(parent, child)
+  invalidate[type]?.(parent, child, falsee)
 }
 
 function debugDumpTree(root: webgpu.Descriptor) {

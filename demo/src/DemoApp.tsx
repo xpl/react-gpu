@@ -123,7 +123,9 @@ function DemoApp() {
                     <gpu-vertex-attribute format="float32x3" />
                     <gpu-vertex-attribute format="float32x4" />
                   </gpu-vertex-buffer-layout>
-                  <gpu-bind-buffer type="uniform" visibility={GPUShaderStage.VERTEX} />
+                  <gpu-bind-group-layout>
+                    <gpu-bind-buffer type="uniform" visibility={GPUShaderStage.VERTEX} />
+                  </gpu-bind-group-layout>
                   <gpu-draw vertexCount={6}>
                     <gpu-uniform-buffer>{uniformData}</gpu-uniform-buffer>
                     <gpu-vertex-buffer>{vertexData}</gpu-vertex-buffer>

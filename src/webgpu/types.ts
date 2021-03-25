@@ -1,5 +1,5 @@
 import { Subtract, RequiredKeys } from 'utility-types'
-import { GPUTextureFormatId } from './enums'
+import { assertRecordType } from '../common'
 
 export const enum Type {
   Root = 0,
@@ -17,6 +17,7 @@ export const enum Type {
   ColorTargetState,
   DepthStencilState,
   ShaderModule,
+  BindGroupLayout,
   BindBuffer,
   UniformBuffer,
   VertexBufferLayout,
@@ -46,7 +47,7 @@ const asDefaults = <T = object>() => <Props extends Dropped<T>>(
 
 export type RootProps = GPURequestAdapterOptions & { verbose: boolean }
 
-export const defaultPropsMap = {
+export const defaultPropsMap = assertRecordType<Type>()({
   [Type.Root]: asDefaults<RootProps>()({}),
   [Type.Limits]: asDefaults<GPULimits>()({}),
   [Type.Feature]: asDefaults<reactgpu.FeatureProps>()({}),
@@ -81,10 +82,15 @@ export const defaultPropsMap = {
   [Type.ShaderModule]: asDefaults<reactgpu.ShaderModuleProps>()({
     code: ''
   }),
+  [Type.BindGroupLayout]: asDefaults<object>()({}),
   [Type.BindBuffer]: asDefaults<reactgpu.BindBufferProps>()({
     binding: -1 // computed
   }),
-  [Type.UniformBuffer]: asDefaults<object>()({}),
+  [Type.UniformBuffer]: asDefaults<reactgpu.BindGroupEntryProps>()({
+    set: -1, // computed
+    binding: -1, // computed
+    resource: (undefined as unknown) as GPUBindingResource
+  }),
   [Type.VertexBufferLayout]: asDefaults<reactgpu.VertexBufferLayoutProps>()({
     attributes: [],
     arrayStride: -1 // computed
@@ -96,14 +102,12 @@ export const defaultPropsMap = {
   [Type.VertexBuffer]: asDefaults<object>()({}),
   [Type.Draw]: asDefaults<reactgpu.DrawProps>()({}),
   [Type.MAX]: {}
-} as const
+} as const)
 
 export const defaultProps = Array.from({
   ...defaultPropsMap,
   length: Type.MAX
 })
-
-const _assertDefaultPropsExhaustiveness: { [K in Type]: unknown } = defaultPropsMap
 
 export type Descriptor<T extends Type = Type> = {
   type: T
@@ -153,7 +157,8 @@ export type RenderBundle = Descriptor<Type.RenderBundle> & {
 }
 export type RenderPipeline = Descriptor<Type.RenderPipeline> & {
   handle?: GPURenderPipeline
-  bindGroupLayout: GPUBindGroupLayout | undefined | null // null = no bind group, undefined = invald
+  pipelineLayout?: GPUPipelineLayout
+  bindGroupLayouts: GPUBindGroupLayout[]
   drawCalls?: Draw[]
   gpuProps: GPURenderPipelineDescriptorNew & {
     vertex: { buffers: GPUVertexBufferLayout[] }
@@ -167,6 +172,9 @@ export type DepthStencilState = Descriptor<Type.DepthStencilState>
 export type ShaderModule = Descriptor<Type.ShaderModule> & {
   handle?: GPUShaderModule
 }
+export type BindGroupLayout = Descriptor<Type.BindGroupLayout> & {
+  handle?: GPUBindGroupLayout
+}
 export type BindBuffer = Descriptor<Type.BindBuffer>
 export type UniformBuffer = Descriptor<Type.UniformBuffer>
 export type VertexBufferLayout = Descriptor<Type.VertexBufferLayout> & {
@@ -174,8 +182,19 @@ export type VertexBufferLayout = Descriptor<Type.VertexBufferLayout> & {
 }
 export type VertexAttribute = Descriptor<Type.VertexAttribute>
 export type VertexBuffer = Descriptor<Type.VertexBuffer>
+
+export type SetVertexBufferArgs = Parameters<GPURenderBundleEncoder['setVertexBuffer']>
+export type SetBindGroupArgs = [
+  index: number,
+  bindGroup: GPUBindGroup,
+  dynamicOffsets?: Iterable<number>
+]
+
 export type Draw = Descriptor<Type.Draw> & {
   args: Parameters<GPURenderBundleEncoder['draw']>
+  vertexBuffersArgs: SetVertexBufferArgs[]
+  bindGroupsArgs: SetBindGroupArgs[]
+  invalid: boolean
 }
 
 type Map<From> = From extends Descriptor<infer T> ? Pick<{ [K in Type]: From }, T> : never
@@ -194,6 +213,7 @@ export type DescriptorType = Map<Root> &
   Map<ColorTargetState> &
   Map<MultisampleState> &
   Map<DepthStencilState> &
+  Map<BindGroupLayout> &
   Map<BindBuffer> &
   Map<UniformBuffer> &
   Map<ShaderModule> &
@@ -231,7 +251,7 @@ const defaults: { [K in Type]?: object } = {
     formatHash: 0
   },
   [Type.RenderPipeline]: {
-    bindGroupLayout: undefined,
+    bindGroupLayouts: [],
     gpuProps: {
       vertex: {
         module: (undefined as unknown) as GPUShaderModule,
@@ -254,7 +274,10 @@ const defaults: { [K in Type]?: object } = {
     attributes: undefined
   },
   [Type.Draw]: {
-    args: [-1, undefined, undefined, undefined]
+    args: [-1, undefined, undefined, undefined],
+    vertexBuffersArgs: [],
+    bindGroupsArgs: [],
+    invalid: true
   },
   [Type.Root]: (undefined as unknown) as Root // we never create root via `makeDescriptor`, so it's fine
 } as NonEmptyAdditonalKeys

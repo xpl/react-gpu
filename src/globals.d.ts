@@ -63,6 +63,11 @@ declare module reactgpu {
     'binding'
   >
 
+  type BindGroupEntryProps = Drop<
+    Optional<GPUBindGroupEntry & { set: number }, 'binding' | 'set'>,
+    'resource'
+  >
+
   type BindBufferProps = GPUBufferBindingLayout & BindGroupLayoutEntryProps
 
   type DrawProps = {
@@ -70,6 +75,12 @@ declare module reactgpu {
     instanceCount?: number
     firstVertex?: number
     firstInstance?: number
+  }
+
+  type BufferProps = {
+    slot?: number
+    offset?: number
+    size?: number
   }
 
   interface IntrinsicElements {
@@ -90,9 +101,10 @@ declare module reactgpu {
     'gpu-shader-module': ShaderModuleProps & { children: string }
     'gpu-vertex-buffer-layout': VertexBufferLayoutProps & JSXChildren
     'gpu-vertex-attribute': VertexAttributeProps
+    'gpu-bind-group-layout': JSXChildren
     'gpu-draw': DrawProps & JSXChildren
-    'gpu-vertex-buffer': { children: ArrayBufferLike | number[] }
-    'gpu-uniform-buffer': { children: ArrayBufferLike | number[] }
+    'gpu-vertex-buffer': BufferProps & { children: ArrayBufferLike | number[] }
+    'gpu-uniform-buffer': BindGroupEntryProps & { children: ArrayBufferLike | number[] }
   }
 }
 
