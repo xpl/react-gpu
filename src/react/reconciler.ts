@@ -314,25 +314,32 @@ function invalidateRoot(x: webgpu.Root) {
 
 function invalidateRenderPipeline(pipeline: webgpu.RenderPipeline) {
   pipeline.handle = undefined
-  ;(pipeline.parent as webgpu.RenderBundle).handle = undefined
+  const { parent } = pipeline
+  if (parent) (parent as webgpu.RenderBundle).handle = undefined
 }
 
 function invalidateBindGroupLayout(layout: webgpu.BindGroupLayout) {
   layout.handle = undefined
-  const pipeline = layout.parent as webgpu.RenderPipeline
-  pipeline.pipelineLayout = undefined
-  invalidateRenderPipeline(pipeline)
+  const pipeline = layout.parent as webgpu.RenderPipeline | undefined
+  if (pipeline) {
+    pipeline.pipelineLayout = undefined
+    invalidateRenderPipeline(pipeline)
+  }
 }
 
 function invalidateDraw(draw: webgpu.Draw) {
   draw.invalid = true
-  ;(draw.parent!.parent as webgpu.RenderBundle).handle = undefined
+  const rb = draw.parent?.parent as webgpu.RenderBundle | undefined
+  if (rb) rb.handle = undefined
 }
 
 function invalidateBindGroup(bg: webgpu.BindGroup) {
   bg.handle = undefined
-  ;(bg.parent as webgpu.Draw).invalid = true
-  ;(bg.parent!.parent as webgpu.RenderBundle).handle = undefined
+  const { parent } = bg
+  if (parent) {
+    ;(parent as webgpu.Draw).invalid = true
+    if (parent.parent) (parent.parent as webgpu.RenderBundle).handle = undefined
+  }
 }
 
 const invalidate = {
@@ -358,11 +365,11 @@ const invalidate = {
   },
   [webgpu.Type.VertexAttribute](parent: webgpu.VertexBufferLayout) {
     parent.attributes = undefined
-    invalidateRenderPipeline(parent.parent as webgpu.RenderPipeline)
+    if (parent.parent) invalidateRenderPipeline(parent.parent as webgpu.RenderPipeline)
   },
   [webgpu.Type.Draw](parent: webgpu.RenderPipeline) {
     parent.drawCalls = undefined
-    ;(parent.parent as webgpu.RenderBundle).handle = undefined
+    if (parent.parent) (parent.parent as webgpu.RenderBundle).handle = undefined
   },
   [webgpu.Type.VertexBuffer]: invalidateDraw,
   [webgpu.Type.UniformBuffer]: invalidateBindGroup
