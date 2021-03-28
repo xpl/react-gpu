@@ -127,7 +127,9 @@ function DemoApp() {
                     <gpu-bind-buffer type="uniform" visibility={GPUShaderStage.VERTEX} />
                   </gpu-bind-group-layout>
                   <gpu-draw vertexCount={6}>
-                    <gpu-uniform-buffer>{uniformData}</gpu-uniform-buffer>
+                    <gpu-bind-group>
+                      <gpu-uniform-buffer>{uniformData}</gpu-uniform-buffer>
+                    </gpu-bind-group>
                     <gpu-vertex-buffer>{vertexData}</gpu-vertex-buffer>
                   </gpu-draw>
                 </gpu-render-pipeline>

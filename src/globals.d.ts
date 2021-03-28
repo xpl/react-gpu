@@ -1,4 +1,17 @@
 declare module reactgpu {
+  type TypedArray =
+    | Int8Array
+    | Uint8Array
+    | Uint8ClampedArray
+    | Int16Array
+    | Uint16Array
+    | Int32Array
+    | Uint32Array
+    | Float32Array
+    | Float64Array
+
+  type BufferData = ArrayBufferLike | TypedArray | Iterable<number>
+
   // Helpers for omitting/optionalizing some fields from original WebGPU definitions to make
   // React props from them. We save dropped fields in __dropped, to recover the original type later
   // when we actually instantiating the descriptor structures.
@@ -63,9 +76,20 @@ declare module reactgpu {
     'binding'
   >
 
-  type BindGroupEntryProps = Drop<
-    Optional<GPUBindGroupEntry & { set: number }, 'binding' | 'set'>,
-    'resource'
+  type BindGroupProps = Drop<
+    {
+      set: number
+    },
+    'set'
+  >
+
+  type UniformBufferProps = Drop<
+    {
+      binding: number
+      offset?: number
+      size?: number
+    },
+    'binding'
   >
 
   type BindBufferProps = GPUBufferBindingLayout & BindGroupLayoutEntryProps
@@ -77,11 +101,14 @@ declare module reactgpu {
     firstInstance?: number
   }
 
-  type BufferProps = {
-    slot?: number
-    offset?: number
-    size?: number
-  }
+  type BufferProps = Optional<
+    {
+      slot: number
+      offset?: number
+      size?: number
+    },
+    'slot'
+  >
 
   interface IntrinsicElements {
     'gpu-feature': FeatureProps
@@ -103,8 +130,9 @@ declare module reactgpu {
     'gpu-vertex-attribute': VertexAttributeProps
     'gpu-bind-group-layout': JSXChildren
     'gpu-draw': DrawProps & JSXChildren
-    'gpu-vertex-buffer': BufferProps & { children: ArrayBufferLike | number[] }
-    'gpu-uniform-buffer': BindGroupEntryProps & { children: ArrayBufferLike | number[] }
+    'gpu-bind-group': BindGroupProps & JSXChildren
+    'gpu-vertex-buffer': BufferProps & { children: BufferData }
+    'gpu-uniform-buffer': UniformBufferProps & { children: BufferData }
   }
 }
 

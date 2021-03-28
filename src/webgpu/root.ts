@@ -18,10 +18,13 @@ import {
   Draw,
   VertexBuffer,
   UniformBuffer,
+  BindGroup,
   BindGroupLayout,
+  SetBindGroupArgs,
   SetVertexBufferArgs
 } from './types'
 import { GPUTextureFormatId, gpuVertexFormatByteLength } from './enums'
+import { BufferAllocator, makeBufferAllocator } from './buffer'
 
 export class InitError extends Error {}
 export class InvalidProps extends Error {}
@@ -68,6 +71,7 @@ export function root(canvas: HTMLCanvasElement): Root {
   let adapter: GPUAdapter | null | undefined
   let device: GPUDevice
   let swapChainPreferredFormat: GPUTextureFormat
+  let bufferAllocator: BufferAllocator
   let validating: Promise<void> | undefined
 
   function encodeAndSubmit() {
@@ -151,8 +155,9 @@ export function root(canvas: HTMLCanvasElement): Root {
       const encoder = device.createRenderBundleEncoder(props)
       for (let x = bundle.first; x !== undefined; x = x.next) {
         const pipeline = validateRenderPipeline(x as RenderPipeline, depthStencilFormat)
+        const { drawCallsInvalid } = pipeline
         for (const draw of pipeline.drawCalls) {
-          if (draw.invalid) validateDraw(draw, pipeline.bindGroupLayouts)
+          if (draw.invalid || drawCallsInvalid) validateDraw(draw, pipeline.bindGroupLayouts)
           for (const args of draw.vertexBuffersArgs) {
             encoder.setVertexBuffer(args[0], args[1], args[2], args[3])
           }
@@ -161,6 +166,7 @@ export function root(canvas: HTMLCanvasElement): Root {
           }
           encoder.draw(...draw.args)
         }
+        if (drawCallsInvalid) pipeline.drawCallsInvalid = false
       }
       bundle.handle = encoder.finish()
     }
@@ -217,6 +223,7 @@ export function root(canvas: HTMLCanvasElement): Root {
         : undefined
       if (validatingLayout) {
         pipeline.bindGroupLayouts = bindGroupLayouts
+        pipeline.drawCallsInvalid = true // invalidate because bindGroups depend on bindGroupLayouts
         gpuProps.layout = bindGroupLayouts.length
           ? device.createPipelineLayout({ bindGroupLayouts })
           : undefined
@@ -345,49 +352,81 @@ export function root(canvas: HTMLCanvasElement): Root {
 
   function validateDraw(draw: Draw, bindGroupLayouts: GPUBindGroupLayout[]) {
     const { vertexBuffersArgs, bindGroupsArgs } = draw
-    let currentBindGroup: GPUBindGroupEntry[] = []
-    let bindGroups = [currentBindGroup]
-    let currentBindGroupIndex = -1
-    let currentBinding = 0
+    let currentBindGroupSet = 0
+    let currentVertexBufferSlot = 0
+    vertexBuffersArgs.length = 0
+    bindGroupsArgs.length = 0
     for (let x = draw.first; x !== undefined; x = x.next) {
       const { type } = x
       if (type === Type.VertexBuffer) {
-        vertexBuffersArgs.push(validateVertexBuffer(x as DescriptorType[typeof type]))
-      } else if (type === Type.UniformBuffer) {
-        const props = validateUniformBuffer(x as DescriptorType[typeof type])
-        const { set, binding } = props
-        if (set !== -1 && set !== currentBindGroupIndex) {
-          currentBindGroupIndex = set
-          currentBindGroup = bindGroups[set] ||= []
-        }
-        if (binding !== -1) {
-          currentBinding = binding
-        }
-        currentBindGroup[currentBinding++] = props
+        const args = validateVertexBuffer(x as DescriptorType[typeof type], currentVertexBufferSlot)
+        currentVertexBufferSlot = args[0] + 1
+        vertexBuffersArgs.push(args)
+      } else if (type === Type.BindGroup) {
+        const args = validateBindGroup(
+          x as DescriptorType[typeof type],
+          currentBindGroupSet,
+          bindGroupLayouts
+        )
+        currentBindGroupSet = args[0] + 1
+        bindGroupsArgs.push(args)
       }
-    }
-    bindGroupsArgs.length = bindGroups.length
-    for (let i = 0, n = bindGroups.length; i !== n; i++) {
-      bindGroupsArgs[i] = [
-        i,
-        device.createBindGroup({
-          layout: bindGroupLayouts[i]!,
-          entries: bindGroups[i]!
-        })
-      ]
     }
     draw.invalid = false
   }
 
-  function validateVertexBuffer(buffer: VertexBuffer): SetVertexBufferArgs {
-    // TODO
+  function validateVertexBuffer(buffer: VertexBuffer, proposedSlot: number): SetVertexBufferArgs {
+    let { managedBuffer } = buffer
+    if (!managedBuffer) {
+      managedBuffer = buffer.managedBuffer = bufferAllocator.alloc(
+        GPUBufferUsage.VERTEX,
+        buffer.data
+      )
+    }
+    const { slot, offset, size } = buffer.props
+    return [slot === -1 ? proposedSlot : slot, managedBuffer.handle, offset, size]
   }
 
-  function validateUniformBuffer(buffer: UniformBuffer): UniformBuffer['props'] {
-    if (!buffer.props.resource) {
-      // TODO
+  function validateBindGroup(
+    bindGroup: BindGroup,
+    proposedSet: number,
+    layouts: GPUBindGroupLayout[]
+  ): SetBindGroupArgs {
+    let {
+      handle,
+      props: { set }
+    } = bindGroup
+    if (set === -1) set = proposedSet
+    const layout = layouts[set]!
+    if (!handle || bindGroup.layout !== layout) {
+      let currentBinding = 0
+      const entries: GPUBindGroupEntry[] = []
+      for (let x = bindGroup.first; x !== undefined; x = x.next) {
+        const entry = validateUniformBuffer(x as UniformBuffer, currentBinding)
+        currentBinding = entry.binding + 1
+        entries.push(entry)
+      }
+      handle = bindGroup.handle = device.createBindGroup({ layout, entries })
     }
-    return buffer.props
+    return [set, handle]
+  }
+
+  function validateUniformBuffer(
+    buffer: UniformBuffer,
+    proposedBinding: number
+  ): GPUBindGroupEntry {
+    let managedBuffer = buffer.managedBuffer
+    if (!managedBuffer) {
+      managedBuffer = buffer.managedBuffer = bufferAllocator.alloc(
+        GPUBufferUsage.VERTEX,
+        buffer.data
+      )
+    }
+    const { binding, offset, size } = buffer.props
+    return {
+      binding: binding === -1 ? proposedBinding : binding,
+      resource: { buffer: managedBuffer.handle, offset, size }
+    }
   }
 
   function validateDevice() {
@@ -421,6 +460,7 @@ export function root(canvas: HTMLCanvasElement): Root {
 
         device.addEventListener('uncapturederror', error => log.error(error))
 
+        bufferAllocator = makeBufferAllocator(device)
         swapChainPreferredFormat = await context.getSwapChainPreferredFormat(
           (adapter as unknown) as GPUDevice
         )

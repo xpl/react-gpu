@@ -28,6 +28,7 @@ const intrinsicElementNameToType = assertRecordType<
   'gpu-depth-stencil': webgpu.Type.DepthStencilState,
   'gpu-bind-group-layout': webgpu.Type.BindGroupLayout,
   'gpu-bind-buffer': webgpu.Type.BindBuffer,
+  'gpu-bind-group': webgpu.Type.BindGroup,
   'gpu-uniform-buffer': webgpu.Type.UniformBuffer,
   'gpu-shader-module': webgpu.Type.ShaderModule,
   'gpu-vertex-buffer-layout': webgpu.Type.VertexBufferLayout,
@@ -61,7 +62,8 @@ const isAllowedParent = Array.from({
   [webgpu.Type.VertexBufferLayout]: p => p === webgpu.Type.RenderPipeline,
   [webgpu.Type.VertexAttribute]: p => p === webgpu.Type.VertexBufferLayout,
   [webgpu.Type.Draw]: p => p === webgpu.Type.RenderPipeline,
-  [webgpu.Type.UniformBuffer]: p => p === webgpu.Type.Draw,
+  [webgpu.Type.BindGroup]: p => p === webgpu.Type.Draw,
+  [webgpu.Type.UniformBuffer]: p => p === webgpu.Type.BindGroup,
   [webgpu.Type.VertexBuffer]: p => p === webgpu.Type.Draw,
   [webgpu.Type.MAX]: p => false,
   length: webgpu.Type.MAX
@@ -194,7 +196,10 @@ const reconciler = ReactReconciler<
     rootContainerInstance,
     hostContext
   ) {
-    const considerChildren = descriptor.type === webgpu.Type.ShaderModule
+    const considerChildren =
+      descriptor.type === webgpu.Type.ShaderModule ||
+      descriptor.type === webgpu.Type.VertexBuffer ||
+      descriptor.type === webgpu.Type.UniformBuffer
     const ignoreChildrenAt = considerChildren ? -1 : Object.keys(newProps).indexOf('children')
     const oldValues = Object.values(oldProps)
     const newValues = Object.values(newProps)
@@ -237,6 +242,22 @@ const reconciler = ReactReconciler<
       ;(child as DescriptorType[typeof type]).props.code = newProps.children
       ;(child as DescriptorType[typeof type]).handle = undefined
       invalidateRenderPipeline(child.parent as webgpu.RenderPipeline)
+    } else if (type === webgpu.Type.VertexBuffer) {
+      const vb = child as DescriptorType[typeof type]
+      vb.data = newProps.children
+      if (vb.managedBuffer !== undefined) {
+        vb.managedBuffer.free()
+        vb.managedBuffer = undefined
+      }
+      invalidateDraw(vb.parent as webgpu.Draw)
+    } else if (type === webgpu.Type.UniformBuffer) {
+      const ub = child as DescriptorType[typeof type]
+      ub.data = newProps.children
+      if (ub.managedBuffer !== undefined) {
+        ub.managedBuffer.free()
+        ub.managedBuffer = undefined
+      }
+      invalidateBindGroup(ub.parent as webgpu.BindGroup)
     } else {
       // @ts-ignore
       invalidate[type]?.(child.parent, child, true)
@@ -293,9 +314,7 @@ function invalidateRoot(x: webgpu.Root) {
 
 function invalidateRenderPipeline(pipeline: webgpu.RenderPipeline) {
   pipeline.handle = undefined
-  if (pipeline.parent) {
-    ;(pipeline.parent as webgpu.RenderBundle).handle = undefined
-  }
+  ;(pipeline.parent as webgpu.RenderBundle).handle = undefined
 }
 
 function invalidateBindGroupLayout(layout: webgpu.BindGroupLayout) {
@@ -303,6 +322,17 @@ function invalidateBindGroupLayout(layout: webgpu.BindGroupLayout) {
   const pipeline = layout.parent as webgpu.RenderPipeline
   pipeline.pipelineLayout = undefined
   invalidateRenderPipeline(pipeline)
+}
+
+function invalidateDraw(draw: webgpu.Draw) {
+  draw.invalid = true
+  ;(draw.parent!.parent as webgpu.RenderBundle).handle = undefined
+}
+
+function invalidateBindGroup(bg: webgpu.BindGroup) {
+  bg.handle = undefined
+  ;(bg.parent as webgpu.Draw).invalid = true
+  ;(bg.parent!.parent as webgpu.RenderBundle).handle = undefined
 }
 
 const invalidate = {
@@ -328,16 +358,14 @@ const invalidate = {
   },
   [webgpu.Type.VertexAttribute](parent: webgpu.VertexBufferLayout) {
     parent.attributes = undefined
-    if (parent.parent) invalidateRenderPipeline(parent.parent as webgpu.RenderPipeline)
+    invalidateRenderPipeline(parent.parent as webgpu.RenderPipeline)
   },
   [webgpu.Type.Draw](parent: webgpu.RenderPipeline) {
     parent.drawCalls = undefined
-    if (parent.parent) (parent.parent as webgpu.RenderBundle).handle = undefined
+    ;(parent.parent as webgpu.RenderBundle).handle = undefined
   },
-  [webgpu.Type.VertexBuffer](parent: webgpu.Draw, child: webgpu.VertexBuffer, byProps: boolean) {
-    if (!byProps) parent.invalid = true
-    if (!propsOnly) invalidateRenderPipeline(parent.parent)
-  }
+  [webgpu.Type.VertexBuffer]: invalidateDraw,
+  [webgpu.Type.UniformBuffer]: invalidateBindGroup
 }
 
 function appendChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {

@@ -1,5 +1,6 @@
 import { Subtract, RequiredKeys } from 'utility-types'
 import { assertRecordType } from '../common'
+import type { ManagedBuffer } from './buffer'
 
 export const enum Type {
   Root = 0,
@@ -19,6 +20,7 @@ export const enum Type {
   ShaderModule,
   BindGroupLayout,
   BindBuffer,
+  BindGroup,
   UniformBuffer,
   VertexBufferLayout,
   VertexAttribute,
@@ -86,10 +88,11 @@ export const defaultPropsMap = assertRecordType<Type>()({
   [Type.BindBuffer]: asDefaults<reactgpu.BindBufferProps>()({
     binding: -1 // computed
   }),
-  [Type.UniformBuffer]: asDefaults<reactgpu.BindGroupEntryProps>()({
-    set: -1, // computed
-    binding: -1, // computed
-    resource: (undefined as unknown) as GPUBindingResource
+  [Type.BindGroup]: asDefaults<reactgpu.BindGroupProps>()({
+    set: -1 // computed
+  }),
+  [Type.UniformBuffer]: asDefaults<reactgpu.UniformBufferProps>()({
+    binding: -1 // computed
   }),
   [Type.VertexBufferLayout]: asDefaults<reactgpu.VertexBufferLayoutProps>()({
     attributes: [],
@@ -99,7 +102,9 @@ export const defaultPropsMap = assertRecordType<Type>()({
     offset: -1, // computed
     shaderLocation: -1 // computed
   }),
-  [Type.VertexBuffer]: asDefaults<object>()({}),
+  [Type.VertexBuffer]: asDefaults<reactgpu.BufferProps>()({
+    slot: -1 // computed
+  }),
   [Type.Draw]: asDefaults<reactgpu.DrawProps>()({}),
   [Type.MAX]: {}
 } as const)
@@ -160,6 +165,7 @@ export type RenderPipeline = Descriptor<Type.RenderPipeline> & {
   pipelineLayout?: GPUPipelineLayout
   bindGroupLayouts: GPUBindGroupLayout[]
   drawCalls?: Draw[]
+  drawCallsInvalid: boolean
   gpuProps: GPURenderPipelineDescriptorNew & {
     vertex: { buffers: GPUVertexBufferLayout[] }
   }
@@ -176,12 +182,22 @@ export type BindGroupLayout = Descriptor<Type.BindGroupLayout> & {
   handle?: GPUBindGroupLayout
 }
 export type BindBuffer = Descriptor<Type.BindBuffer>
-export type UniformBuffer = Descriptor<Type.UniformBuffer>
+export type BindGroup = Descriptor<Type.BindGroup> & {
+  handle?: GPUBindGroup
+  layout?: GPUBindGroupLayout
+}
 export type VertexBufferLayout = Descriptor<Type.VertexBufferLayout> & {
   attributes?: GPUVertexAttribute[]
 }
 export type VertexAttribute = Descriptor<Type.VertexAttribute>
-export type VertexBuffer = Descriptor<Type.VertexBuffer>
+export type VertexBuffer = Descriptor<Type.VertexBuffer> & {
+  managedBuffer?: ManagedBuffer
+  data: reactgpu.BufferData
+}
+export type UniformBuffer = Descriptor<Type.UniformBuffer> & {
+  managedBuffer?: ManagedBuffer
+  data: reactgpu.BufferData
+}
 
 export type SetVertexBufferArgs = Parameters<GPURenderBundleEncoder['setVertexBuffer']>
 export type SetBindGroupArgs = [
@@ -215,6 +231,7 @@ export type DescriptorType = Map<Root> &
   Map<DepthStencilState> &
   Map<BindGroupLayout> &
   Map<BindBuffer> &
+  Map<BindGroup> &
   Map<UniformBuffer> &
   Map<ShaderModule> &
   Map<VertexBufferLayout> &
@@ -252,6 +269,7 @@ const defaults: { [K in Type]?: object } = {
   },
   [Type.RenderPipeline]: {
     bindGroupLayouts: [],
+    drawCallsInvalid: false,
     gpuProps: {
       vertex: {
         module: (undefined as unknown) as GPUShaderModule,
@@ -272,6 +290,12 @@ const defaults: { [K in Type]?: object } = {
   },
   [Type.VertexAttribute]: {
     attributes: undefined
+  },
+  [Type.VertexBuffer]: {
+    data: []
+  },
+  [Type.UniformBuffer]: {
+    data: []
   },
   [Type.Draw]: {
     args: [-1, undefined, undefined, undefined],
