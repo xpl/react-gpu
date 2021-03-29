@@ -1,6 +1,13 @@
+import { assertRecordType } from '../common'
+
 const badge = '[react-gpu]'
 
-export const loggers = {
+export interface Logger {
+  debug(...args: unknown[]): void
+  error(...args: unknown[]): void
+}
+
+export const loggers = assertRecordType<string, Logger>()({
   verbose: {
     debug(...args: unknown[]) {
       console.debug(badge, ...args)
@@ -15,4 +22,4 @@ export const loggers = {
       console.error(badge, ...args)
     }
   }
-}
+})

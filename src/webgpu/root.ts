@@ -274,6 +274,7 @@ export function root(canvas: HTMLCanvasElement): Root {
         })
         nextBinding = currentBinding + 1
       }
+      log.debug('createBindGroupLayout', entries)
       return (layout.handle = device.createBindGroupLayout({ entries }))
     }
     return handle
@@ -406,6 +407,7 @@ export function root(canvas: HTMLCanvasElement): Root {
         currentBinding = entry.binding + 1
         entries.push(entry)
       }
+      log.debug('createBindGroup', entries)
       handle = bindGroup.handle = device.createBindGroup({ layout, entries })
     }
     return [set, handle]
@@ -418,7 +420,7 @@ export function root(canvas: HTMLCanvasElement): Root {
     let managedBuffer = buffer.managedBuffer
     if (!managedBuffer) {
       managedBuffer = buffer.managedBuffer = bufferAllocator.alloc(
-        GPUBufferUsage.VERTEX,
+        GPUBufferUsage.UNIFORM,
         buffer.data
       )
     }
@@ -474,7 +476,7 @@ export function root(canvas: HTMLCanvasElement): Root {
           }
         )
 
-        bufferAllocator = makeBufferAllocator(device)
+        bufferAllocator = makeBufferAllocator(device, log)
         swapChainPreferredFormat = await context.getSwapChainPreferredFormat(
           (adapter as unknown) as GPUDevice
         )
