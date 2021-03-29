@@ -124,7 +124,10 @@ function DemoApp() {
                     <gpu-vertex-attribute format="float32x4" />
                   </gpu-vertex-buffer-layout>
                   <gpu-bind-group-layout>
-                    <gpu-bind-buffer type="uniform" visibility={GPUShaderStage.VERTEX} />
+                    <gpu-bind-buffer
+                      type="uniform"
+                      visibility={GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT}
+                    />
                   </gpu-bind-group-layout>
                   <gpu-draw vertexCount={6}>
                     <gpu-bind-group>

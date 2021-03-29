@@ -160,6 +160,8 @@ const reconciler = ReactReconciler<
       assignColorTargetState(gpuProps, props)
     } else if (type === webgpu.Type.ShaderModule) {
       ;(child as DescriptorType[typeof type]).props.code = props.children
+    } else if (type === webgpu.Type.VertexBuffer || type === webgpu.Type.UniformBuffer) {
+      ;(child as DescriptorType[typeof type]).data = props.children
     }
     return child
   },

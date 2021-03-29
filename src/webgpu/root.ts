@@ -155,6 +155,7 @@ export function root(canvas: HTMLCanvasElement): Root {
       const encoder = device.createRenderBundleEncoder(props)
       for (let x = bundle.first; x !== undefined; x = x.next) {
         const pipeline = validateRenderPipeline(x as RenderPipeline, depthStencilFormat)
+        encoder.setPipeline(pipeline.handle)
         const { drawCallsInvalid } = pipeline
         for (const draw of pipeline.drawCalls) {
           if (draw.invalid || drawCallsInvalid) validateDraw(draw, pipeline.bindGroupLayouts)
