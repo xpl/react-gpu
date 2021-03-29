@@ -1,1 +1,8 @@
-export * from './DemoApp'
+import 'panic-overlay'
+import React from 'react'
+import { render } from 'react-dom'
+
+import 'reset-css'
+import { DemoApp } from './DemoApp'
+
+render(<DemoApp />, document.getElementById('root'))
