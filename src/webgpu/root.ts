@@ -458,7 +458,21 @@ export function root(canvas: HTMLCanvasElement): Root {
         } as unknown) as GPUDeviceDescriptor))!
         if (!device) throw new InitError('Failed to init WebGPU device!')
 
-        device.addEventListener('uncapturederror', error => log.error(error))
+        device.addEventListener(
+          'uncapturederror',
+          // @ts-ignore
+          (event: GPUUncapturedErrorEvent) => {
+            log.error(event)
+            const { error } = event
+            // @ts-ignore
+            const stack: string | undefined = error.message
+            const message = stack ? stack.split('\n')[0] : error.constructor.name
+            const err = new Error(message)
+            err.constructor = error.constructor
+            if (message) err.stack = stack
+            throw err
+          }
+        )
 
         bufferAllocator = makeBufferAllocator(device)
         swapChainPreferredFormat = await context.getSwapChainPreferredFormat(

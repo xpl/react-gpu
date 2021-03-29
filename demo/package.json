@@ -28,7 +28,7 @@
     "sass": "1.29.0"
   },
   "dependencies": {
-    "panic-overlay": "^1.0.44",
+    "panic-overlay": "^1.0.51",
     "reset-css": "5.0.1"
   }
 }
