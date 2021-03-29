@@ -1,6 +1,7 @@
 import { Subtract, RequiredKeys } from 'utility-types'
 import { assertRecordType } from '../common'
 import type { ManagedBuffer } from './buffer'
+import type { ManagedShader } from './shader'
 
 export const enum Type {
   Root = 0,
@@ -176,7 +177,7 @@ export type ColorTargetState = Descriptor<Type.ColorTargetState> & {
 export type MultisampleState = Descriptor<Type.MultisampleState>
 export type DepthStencilState = Descriptor<Type.DepthStencilState>
 export type ShaderModule = Descriptor<Type.ShaderModule> & {
-  handle?: GPUShaderModule
+  managed?: ManagedShader
 }
 export type BindGroupLayout = Descriptor<Type.BindGroupLayout> & {
   handle?: GPUBindGroupLayout
@@ -191,11 +192,11 @@ export type VertexBufferLayout = Descriptor<Type.VertexBufferLayout> & {
 }
 export type VertexAttribute = Descriptor<Type.VertexAttribute>
 export type VertexBuffer = Descriptor<Type.VertexBuffer> & {
-  managedBuffer?: ManagedBuffer
+  managed?: ManagedBuffer
   data: reactgpu.BufferData
 }
 export type UniformBuffer = Descriptor<Type.UniformBuffer> & {
-  managedBuffer?: ManagedBuffer
+  managed?: ManagedBuffer
   data: reactgpu.BufferData
 }
 

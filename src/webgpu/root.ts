@@ -25,6 +25,7 @@ import {
 } from './types'
 import { GPUTextureFormatId, gpuVertexFormatByteLength } from './enums'
 import { BufferAllocator, makeBufferAllocator } from './buffer'
+import { ShaderAllocator, makeShaderAllocator, ManagedShader } from './shader'
 
 export class InitError extends Error {}
 export class InvalidProps extends Error {}
@@ -72,6 +73,7 @@ export function root(canvas: HTMLCanvasElement): Root {
   let device: GPUDevice
   let swapChainPreferredFormat: GPUTextureFormat
   let bufferAllocator: BufferAllocator
+  let shaderAllocator: ShaderAllocator
   let validating: Promise<void> | undefined
 
   function encodeAndSubmit() {
@@ -213,12 +215,12 @@ export function root(canvas: HTMLCanvasElement): Root {
         fragmentStates.length && m1?.props.fragmentEntryPoint !== undefined ? m1 : m2
       if (vertModule === undefined) throw new InvalidProps('must specify a vertex shader entry')
       const { vertex } = gpuProps
-      vertex.module = validateShaderModule(vertModule).handle
+      vertex.module = validateShaderModule(vertModule)
       vertex.entryPoint = vertModule.props.vertexEntryPoint!
       gpuProps.fragment = fragModule
         ? {
             entryPoint: fragModule.props.fragmentEntryPoint!,
-            module: validateShaderModule(fragModule).handle,
+            module: validateShaderModule(fragModule),
             targets: fragmentStates
           }
         : undefined
@@ -313,7 +315,6 @@ export function root(canvas: HTMLCanvasElement): Root {
     let { view } = t
     if (view === undefined) {
       const { props } = t
-      let size: number[]
       if (props.fullScreen) {
         props.size = [canvas.width, canvas.height, 1]
       } else if (props.width !== undefined) {
@@ -340,16 +341,8 @@ export function root(canvas: HTMLCanvasElement): Root {
     return t as ValidTexture
   }
 
-  // TODO: LRU cache
-  function validateShaderModule(m: ShaderModule): { handle: GPUShaderModule } {
-    if (!m.handle) {
-      log.debug('createShaderModule', m.props)
-      m.handle = device.createShaderModule(m.props)
-      if (m.props.onCompilationInfo) {
-        m.handle.compilationInfo().then(m.props.onCompilationInfo)
-      }
-    }
-    return m as { handle: GPUShaderModule }
+  function validateShaderModule(m: ShaderModule): GPUShaderModule {
+    return (m.managed ||= shaderAllocator.alloc(m.props, m.props.onCompilationInfo)).handle
   }
 
   function validateDraw(draw: Draw, bindGroupLayouts: GPUBindGroupLayout[]) {
@@ -378,15 +371,12 @@ export function root(canvas: HTMLCanvasElement): Root {
   }
 
   function validateVertexBuffer(buffer: VertexBuffer, proposedSlot: number): SetVertexBufferArgs {
-    let { managedBuffer } = buffer
-    if (!managedBuffer) {
-      managedBuffer = buffer.managedBuffer = bufferAllocator.alloc(
-        GPUBufferUsage.VERTEX,
-        buffer.data
-      )
+    let { managed } = buffer
+    if (managed === undefined) {
+      managed = buffer.managed = bufferAllocator.alloc(GPUBufferUsage.VERTEX, buffer.data)
     }
     const { slot, offset, size } = buffer.props
-    return [slot === -1 ? proposedSlot : slot, managedBuffer.handle, offset, size]
+    return [slot === -1 ? proposedSlot : slot, managed.handle, offset, size]
   }
 
   function validateBindGroup(
@@ -418,17 +408,14 @@ export function root(canvas: HTMLCanvasElement): Root {
     buffer: UniformBuffer,
     proposedBinding: number
   ): GPUBindGroupEntry {
-    let managedBuffer = buffer.managedBuffer
-    if (!managedBuffer) {
-      managedBuffer = buffer.managedBuffer = bufferAllocator.alloc(
-        GPUBufferUsage.UNIFORM,
-        buffer.data
-      )
+    let { managed } = buffer
+    if (managed === undefined) {
+      managed = buffer.managed = bufferAllocator.alloc(GPUBufferUsage.UNIFORM, buffer.data)
     }
     const { binding, offset, size } = buffer.props
     return {
       binding: binding === -1 ? proposedBinding : binding,
-      resource: { buffer: managedBuffer.handle, offset, size }
+      resource: { buffer: managed.handle, offset, size }
     }
   }
 
@@ -478,6 +465,8 @@ export function root(canvas: HTMLCanvasElement): Root {
         )
 
         bufferAllocator = makeBufferAllocator(device, log)
+        shaderAllocator = makeShaderAllocator(device, log)
+
         swapChainPreferredFormat = await context.getSwapChainPreferredFormat(
           (adapter as unknown) as GPUDevice
         )

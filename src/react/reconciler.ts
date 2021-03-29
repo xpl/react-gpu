@@ -241,28 +241,23 @@ const reconciler = ReactReconciler<
       assignColorTargetState(gpuProps, props)
       invalidateRenderPipeline(child.parent as webgpu.RenderPipeline)
     } else if (type === webgpu.Type.ShaderModule) {
-      ;(child as DescriptorType[typeof type]).props.code = newProps.children
-      ;(child as DescriptorType[typeof type]).handle = undefined
+      const shader = child as DescriptorType[typeof type]
+      shader.props.code = newProps.children
+      freeManagedResource(shader)
       invalidateRenderPipeline(child.parent as webgpu.RenderPipeline)
     } else if (type === webgpu.Type.VertexBuffer) {
       const vb = child as DescriptorType[typeof type]
       vb.data = newProps.children
-      if (vb.managedBuffer !== undefined) {
-        vb.managedBuffer.free()
-        vb.managedBuffer = undefined
-      }
+      freeManagedResource(vb)
       invalidateDraw(vb.parent as webgpu.Draw)
     } else if (type === webgpu.Type.UniformBuffer) {
       const ub = child as DescriptorType[typeof type]
       ub.data = newProps.children
-      if (ub.managedBuffer !== undefined) {
-        ub.managedBuffer.free()
-        ub.managedBuffer = undefined
-      }
+      freeManagedResource(ub)
       invalidateBindGroup(ub.parent as webgpu.BindGroup)
     } else {
       // @ts-ignore
-      invalidate[type]?.(child.parent, child, true)
+      invalidate[type]?.(child.parent, child)
     }
   },
 
@@ -344,6 +339,15 @@ function invalidateBindGroup(bg: webgpu.BindGroup) {
   }
 }
 
+type OwnsManagedResource = { managed?: { free(): void } }
+
+function freeManagedResource(x: OwnsManagedResource) {
+  if (x.managed !== undefined) {
+    x.managed.free()
+    x.managed = undefined
+  }
+}
+
 const invalidate = {
   [webgpu.Type.Feature]: invalidateRoot,
   [webgpu.Type.Limits]: invalidateRoot,
@@ -418,8 +422,16 @@ function insertBefore(
 
   child.parent = parent
 
+  if (
+    type === webgpu.Type.ShaderModule ||
+    type === webgpu.Type.VertexBuffer ||
+    type === webgpu.Type.UniformBuffer
+  ) {
+    freeManagedResource(child as OwnsManagedResource)
+  }
+
   // @ts-ignore
-  invalidate[type]?.(parent, child, false)
+  invalidate[type]?.(parent, child)
 }
 
 function removeChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
@@ -439,7 +451,7 @@ function removeChild(parent: webgpu.Descriptor, child: webgpu.Descriptor) {
   child.parent = undefined
 
   // @ts-ignore
-  invalidate[type]?.(parent, child, falsee)
+  invalidate[type]?.(parent, child)
 }
 
 function debugDumpTree(root: webgpu.Descriptor) {
