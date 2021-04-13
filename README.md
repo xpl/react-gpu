@@ -73,4 +73,4 @@ model in describing rendering pipelines for modern GPUs (via [WebGPU](https://gp
 
 ## Also Check
 
-- **[TypeScript Shading Language](https://github.com/xpl/tssl)
+- **[TypeScript Shading Language](https://github.com/xpl/tssl)**
